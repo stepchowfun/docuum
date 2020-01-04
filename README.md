@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/stepchowfun/docuum.svg?branch=master)](https://travis-ci.org/stepchowfun/docuum)
 
-*Tagref* performs LRU cache eviction for Docker images.
+*Docuum* performs LRU cache eviction for Docker images.
 
 ## Installation
 
