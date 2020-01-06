@@ -1,8 +1,14 @@
 [package]
 name = "docuum"
 version = "0.2.0"
-authors = ["Stephan Boyer <stephan.boyer@airbnb.com>"]
+authors = ["Stephan Boyer <stephan@stephanboyer.com>"]
 edition = "2018"
+description = "LRU eviction of Docker images"
+license = "MIT"
+documentation = "https://github.com/stepchowfun/docuum"
+homepage = "https://github.com/stepchowfun/docuum"
+repository = "https://github.com/stepchowfun/docuum"
+readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
