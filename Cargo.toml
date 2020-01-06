@@ -1,6 +1,6 @@
 [package]
 name = "docuum"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Stephan Boyer <stephan.boyer@airbnb.com>"]
 edition = "2018"
 
