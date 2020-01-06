@@ -36,7 +36,7 @@ const CAPACITY_ARG: &str = "capacity";
 
 // This struct represents the command-line arguments.
 pub struct Settings {
-    _capacity: Byte,
+    capacity: Byte,
 }
 
 // Set up the logger.
@@ -114,9 +114,7 @@ fn settings() -> io::Result<Settings> {
         },
     )?;
 
-    Ok(Settings {
-        _capacity: capacity,
-    })
+    Ok(Settings { capacity })
 }
 
 // Ask Docker for the ID of an image.
@@ -267,12 +265,34 @@ fn space_usage() -> io::Result<Byte> {
         })
 }
 
+// Delete a Docker image.
+fn delete_image(image_id: &str) -> io::Result<()> {
+    info!("Deleting image {}\u{2026}", image_id.code_str());
+
+    // Tell Docker to delete the image.
+    let mut child = Command::new("docker")
+        .args(&["image", "rm", "--force", "--no-prune", image_id])
+        .spawn()?;
+
+    // Ensure the command succeeded.
+    if !child.wait()?.success() {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!("Unable to delete image {}.", image_id.code_str()),
+        ));
+    }
+
+    Ok(())
+}
+
 // The main vacuum logic
-fn vacuum(state: &mut State) -> io::Result<()> {
+fn vacuum(state: &mut State, capacity: &Byte) -> io::Result<()> {
     info!("Vacuuming\u{2026}");
 
-    // Remove non-existent images from `state`.
+    // Determine all the image IDs.
     let image_ids = image_ids()?;
+
+    // Remove non-existent images from `state`.
     state.images.retain(|image_id, _| {
         debug!(
             "Removing record for non-existent image {}\u{2026}",
@@ -282,7 +302,7 @@ fn vacuum(state: &mut State) -> io::Result<()> {
     });
 
     // Add any missing images to `state`.
-    for image_id in image_ids {
+    for image_id in &image_ids {
         state.images.entry(image_id.clone()).or_insert_with(|| {
             debug!(
                 "Adding record for missing image {}\u{2026}",
@@ -301,11 +321,52 @@ fn vacuum(state: &mut State) -> io::Result<()> {
         update_timestamp(state, &image_id)?;
     }
 
-    // TODO: Prune!
-    info!(
-        "Docker images are currently occupying {} bytes.",
-        space_usage()?.to_string().code_str(),
-    );
+    // Sort the image IDs from least recently used to most recently used.
+    let mut image_ids_vec = image_ids.iter().collect::<Vec<_>>();
+    image_ids_vec.sort_by(|&x, &y| {
+        // The two `unwrap`s here are safe by the construction of `image_ids_vec`.
+        state
+            .images
+            .get(x)
+            .unwrap()
+            .cmp(state.images.get(y).unwrap())
+    });
+
+    // Check if we're over capacity.
+    let space = space_usage()?;
+    if space > *capacity {
+        info!(
+            "Some images need to be deleted. The images are currently taking up {} but the limit \
+             is set to {}.",
+            space.get_appropriate_unit(true).to_string().code_str(),
+            capacity.get_appropriate_unit(true).to_string().code_str(),
+        );
+
+        // Start deleting images, starting with the least recently used.
+        for image_id in image_ids_vec {
+            // Break if we're under the threshold.
+            let new_space = space_usage()?;
+            if new_space <= *capacity {
+                info!(
+                    "The images are now taking up {}, which is under the limit of {}.",
+                    new_space.get_appropriate_unit(true).to_string().code_str(),
+                    capacity.get_appropriate_unit(true).to_string().code_str(),
+                );
+                break;
+            }
+
+            // Delete the image and continue.
+            if let Err(error) = delete_image(image_id) {
+                error!("{}", error);
+            }
+        }
+    } else {
+        info!(
+            "The images are taking up {}, which is under the limit of {}.",
+            space.get_appropriate_unit(true).to_string().code_str(),
+            capacity.get_appropriate_unit(true).to_string().code_str(),
+        );
+    }
 
     // Persist the state.
     state::save(&state)
@@ -320,7 +381,7 @@ fn entry() -> io::Result<()> {
     set_up_logging();
 
     // Parse the command-line arguments;
-    let _settings = settings()?;
+    let settings = settings()?;
 
     // Try to load the state from disk.
     let mut state = state::load().unwrap_or_else(|error| {
@@ -335,7 +396,7 @@ fn entry() -> io::Result<()> {
     });
 
     // Run the main vacuum logic.
-    vacuum(&mut state)?;
+    vacuum(&mut state, &settings.capacity)?;
 
     // Spawn `docker events --format '{{json .}}'`.
     let child = Command::new("docker")
@@ -386,7 +447,7 @@ fn entry() -> io::Result<()> {
         update_timestamp(&mut state, &image_id)?;
 
         // Run the main vacuum logic.
-        vacuum(&mut state)?;
+        vacuum(&mut state, &settings.capacity)?;
     }
 
     Ok(())
