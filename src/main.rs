@@ -2,7 +2,11 @@ mod docker;
 mod format;
 mod state;
 
-use crate::{docker::Event, format::CodeStr, state::State};
+use crate::{
+    docker::{Event, SpaceRecord},
+    format::CodeStr,
+    state::State,
+};
 use atty::Stream;
 use byte_unit::Byte;
 use clap::{App, AppSettings, Arg};
@@ -206,7 +210,7 @@ pub fn images_in_use() -> io::Result<HashSet<String>> {
 fn update_timestamp(state: &mut State, image_id: &str) -> io::Result<()> {
     info!(
         "Updating last-used timestamp for image {}\u{2026}",
-        image_id.code_str()
+        image_id.code_str(),
     );
     match SystemTime::now().duration_since(UNIX_EPOCH) {
         Ok(duration) => {
@@ -215,6 +219,52 @@ fn update_timestamp(state: &mut State, image_id: &str) -> io::Result<()> {
         }
         Err(error) => Err(io::Error::new(io::ErrorKind::Other, error)),
     }
+}
+
+// Get the total space used by Docker images.
+fn space_usage() -> io::Result<Byte> {
+    // Query Docker for the space usage.
+    let output = Command::new("docker")
+        .args(&["system", "df", "--format", "{{json .}}"])
+        .stderr(Stdio::inherit())
+        .output()?;
+
+    // Ensure the command succeeded.
+    if !output.status.success() {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "Unable to determine IDs of all images.",
+        ));
+    }
+
+    // Find the relevant line of output.
+    String::from_utf8(output.stdout)
+        .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
+        .and_then(|output| {
+            for line in output.lines() {
+                // Parse the line as a space record.
+                if let Ok(space_record) = serde_json::from_str::<SpaceRecord>(&line) {
+                    // Return early if we found the record we're looking for.
+                    if space_record.r#type == "Images" {
+                        return Byte::from_str(&space_record.size).map_err(|_| {
+                            io::Error::new(
+                                io::ErrorKind::Other,
+                                format!("Invalid capacity {}.", space_record.size.code_str()),
+                            )
+                        });
+                    }
+                }
+            }
+
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!(
+                    "Unable to parse output of {}: {}",
+                    "docker system df".code_str(),
+                    output.code_str(),
+                ),
+            ))
+        })
 }
 
 // The main vacuum logic
@@ -226,7 +276,7 @@ fn vacuum(state: &mut State) -> io::Result<()> {
     state.images.retain(|image_id, _| {
         debug!(
             "Removing record for non-existent image {}\u{2026}",
-            image_id.code_str()
+            image_id.code_str(),
         );
         image_ids.contains(image_id)
     });
@@ -236,7 +286,7 @@ fn vacuum(state: &mut State) -> io::Result<()> {
         state.images.entry(image_id.clone()).or_insert_with(|| {
             debug!(
                 "Adding record for missing image {}\u{2026}",
-                &image_id.code_str()
+                &image_id.code_str(),
             );
             Duration::new(0, 0)
         });
@@ -252,6 +302,10 @@ fn vacuum(state: &mut State) -> io::Result<()> {
     }
 
     // TODO: Prune!
+    info!(
+        "Docker images are currently occupying {} bytes.",
+        space_usage()?.to_string().code_str(),
+    );
 
     // Persist the state.
     state::save(&state)
@@ -308,7 +362,7 @@ fn entry() -> io::Result<()> {
         debug!("Incoming event: {}", line.code_str());
 
         // Parse the line as an event.
-        let event: Event = match serde_json::from_str(&line) {
+        let event = match serde_json::from_str::<Event>(&line) {
             Ok(event) => {
                 debug!("Parsed as: {}", format!("{:?}", event).code_str());
                 event
