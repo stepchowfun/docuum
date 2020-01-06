@@ -9,6 +9,7 @@ use clap::{App, AppSettings, Arg};
 use env_logger::{fmt::Color, Builder};
 use log::{Level, LevelFilter};
 use std::{
+    collections::HashSet,
     env,
     io::{self, BufRead, BufReader, Write},
     process::{exit, Command, Stdio},
@@ -118,7 +119,7 @@ fn settings() -> io::Result<Settings> {
 pub fn image_id(image: &str) -> io::Result<String> {
     // Query Docker for the image ID.
     let output = Command::new("docker")
-        .args(&["image", "inspect", "--format", "{{.Id}}", image])
+        .args(&["image", "inspect", "--format", "{{.ID}}", image])
         .stderr(Stdio::inherit())
         .output()?;
 
@@ -133,6 +134,34 @@ pub fn image_id(image: &str) -> io::Result<String> {
     // Decode the output bytes into UTF-8 and trim any leading/trailing whitespace.
     String::from_utf8(output.stdout)
         .map(|output| output.trim().to_owned())
+        .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
+}
+
+// Ask Docker for the IDs of all the images.
+pub fn image_ids() -> io::Result<HashSet<String>> {
+    // Query Docker for the image IDs.
+    let output = Command::new("docker")
+        .args(&["image", "ls", "--all", "--no-trunc", "--format", "{{.ID}}"])
+        .stderr(Stdio::inherit())
+        .output()?;
+
+    // Ensure the command succeeded.
+    if !output.status.success() {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "Unable to determine IDs of all images.",
+        ));
+    }
+
+    // Decode the output bytes into UTF-8 and collect the lines.
+    String::from_utf8(output.stdout)
+        .map(|output| {
+            output
+                .lines()
+                .map(|line| line.trim().to_owned())
+                .filter(|line| !line.is_empty())
+                .collect()
+        })
         .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
 }
 
@@ -152,13 +181,24 @@ fn update_timestamp(state: &mut State, image_id: &str) -> io::Result<()> {
 }
 
 // The main vacuum logic
-fn vacuum(_state: &mut State) -> io::Result<()> {
+fn vacuum(state: &mut State) -> io::Result<()> {
     info!("Vacuuming\u{2026}");
-    // TODO: Remove non-existent images from `state`.
+
+    // Remove non-existent images from `state`.
+    let image_ids = image_ids()?;
+    state.images.retain(|image_id, _| {
+        debug!(
+            "Removing record for non-existent image {}\u{2026}",
+            image_id.code_str()
+        );
+        image_ids.contains(image_id)
+    });
+
     // TODO: Update the timestamps of the images for running containers.
     // TODO: Prune!
 
-    Ok(())
+    // Persist the state.
+    state::save(&state)
 }
 
 // Program entrypoint
