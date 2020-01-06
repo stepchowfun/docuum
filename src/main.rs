@@ -165,6 +165,43 @@ pub fn image_ids() -> io::Result<HashSet<String>> {
         .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
 }
 
+// Ask Docker for the images used by any existing containers. It's not clear from the Docker
+// documentation whether the results are image IDs (vs. tags or something else), so don't assume
+// the results are IDs.
+pub fn images_in_use() -> io::Result<HashSet<String>> {
+    // Query Docker for the image IDs.
+    let output = Command::new("docker")
+        .args(&[
+            "container",
+            "ls",
+            "--all",
+            "--no-trunc",
+            "--format",
+            "{{.Image}}",
+        ])
+        .stderr(Stdio::inherit())
+        .output()?;
+
+    // Ensure the command succeeded.
+    if !output.status.success() {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "Unable to determine IDs of all images.",
+        ));
+    }
+
+    // Decode the output bytes into UTF-8 and collect the lines.
+    String::from_utf8(output.stdout)
+        .map(|output| {
+            output
+                .lines()
+                .map(|line| line.trim().to_owned())
+                .filter(|line| !line.is_empty())
+                .collect()
+        })
+        .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
+}
+
 // Update the timestamp for an image.
 fn update_timestamp(state: &mut State, image_id: &str) -> io::Result<()> {
     info!(
@@ -194,7 +231,15 @@ fn vacuum(state: &mut State) -> io::Result<()> {
         image_ids.contains(image_id)
     });
 
-    // TODO: Update the timestamps of the images for running containers.
+    // Update the timestamps of any images in use.
+    for image in images_in_use()? {
+        // Get the ID of the image.
+        let image_id = image_id(&image)?;
+
+        // Update the timestamp for this image.
+        update_timestamp(state, &image_id)?;
+    }
+
     // TODO: Prune!
 
     // Persist the state.
