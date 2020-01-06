@@ -2,7 +2,34 @@
 
 [![Build Status](https://travis-ci.org/stepchowfun/docuum.svg?branch=master)](https://travis-ci.org/stepchowfun/docuum)
 
-*Docuum* performs LRU cache eviction for Docker images.
+*Docuum* performs least recently used (LRU) eviction of Docker images to keep the total disk usage below a given threshold. Docker's build in `docker image prune` command is not ideal because it uses the image creation time, rather than the last usage time, to determine which images to remove.
+
+Docuum is ideal for use cases such as CI workers, development environments, or any other situation in which Docker images accumulate on disk over time.
+
+## Usage
+
+Docuum is meant to be run forever (rather than as a periodic cron job, for example). You can run it like this:
+
+```sh
+$ docuum --capacity '30 GiB'
+```
+
+Here are the supported command-line options:
+
+```
+USAGE:
+    docuum
+
+OPTIONS:
+    -c, --capacity <CAPACITY>
+            Sets the maximum amount of space to be used for Docker images (default: 10 GiB)
+
+    -h, --help
+            Prints help information
+
+    -v, --version
+            Prints version information
+```
 
 ## Installation
 
