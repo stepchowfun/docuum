@@ -1,3 +1,4 @@
+use crate::format::CodeStr;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -9,6 +10,7 @@ use std::{
 
 // The program state
 #[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct State {
     // Map from image ID to last use time expressed as a duration since the UNIX epoch
     pub images: HashMap<String, Duration>,
@@ -31,6 +33,12 @@ pub fn initial() -> State {
 pub fn load() -> io::Result<State> {
     // Check if we have a path.
     if let Some(path) = path() {
+        // Log what we are trying to do in case an error occurs.
+        debug!(
+            "Attempting to load the state from {}\u{2026}",
+            path.to_string_lossy().code_str(),
+        );
+
         // Read the YAML from disk.
         let yaml = read_to_string(path)?;
 
@@ -40,7 +48,7 @@ pub fn load() -> io::Result<State> {
         // Fail if we don't have a path.
         Err(io::Error::new(
             io::ErrorKind::Other,
-            "Unable to locate data directory.",
+            "Unable to locate data directory. State not loaded from disk.",
         ))
     }
 }
@@ -49,6 +57,12 @@ pub fn load() -> io::Result<State> {
 pub fn save(state: &State) -> io::Result<()> {
     // Check if we have a path.
     if let Some(path) = path() {
+        // Log what we are trying to do in case an error occurs.
+        debug!(
+            "Persisting the state to {}\u{2026}",
+            path.to_string_lossy().code_str(),
+        );
+
         // The `unwrap` is safe due to [ref:state-path-has-parent].
         let parent = path.parent().unwrap().to_owned();
 
@@ -64,7 +78,7 @@ pub fn save(state: &State) -> io::Result<()> {
         // Fail if we don't have a path.
         return Err(io::Error::new(
             io::ErrorKind::Other,
-            "Unable to locate data directory.",
+            "Unable to locate data directory. State not persisted to disk.",
         ));
     }
 
