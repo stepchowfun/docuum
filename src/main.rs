@@ -7,11 +7,13 @@ use byte_unit::Byte;
 use clap::{App, AppSettings, Arg};
 use env_logger::{fmt::Color, Builder};
 use log::{Level, LevelFilter};
+use serde::{Deserialize, Serialize};
 use std::{
     env,
-    io::{self, Write},
-    process::exit,
+    io::{self, BufRead, BufReader, Write},
+    process::{exit, Command, Stdio},
     str::FromStr,
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 #[macro_use]
@@ -112,6 +114,54 @@ fn settings() -> io::Result<Settings> {
     })
 }
 
+// Ask Docker for the ID of an image.
+pub fn image_id(image: &str) -> io::Result<String> {
+    // Query Docker for the image ID.
+    let output = Command::new("docker")
+        .args(&["image", "inspect", "--format", "{{.Id}}", image])
+        .stderr(Stdio::inherit())
+        .output()?;
+
+    // Ensure the command succeeded.
+    if !output.status.success() {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!("Unable to determine ID of image {}.", image.code_str()),
+        ));
+    }
+
+    // Decode the output bytes into UTF-8 and trim any leading/trailing whitespace.
+    String::from_utf8(output.stdout)
+        .map(|output| output.trim().to_owned())
+        .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
+}
+
+// A Docker event
+#[derive(Deserialize, Serialize, Debug)]
+pub struct DockerEvent {
+    #[serde(rename = "Type")]
+    pub r#type: String,
+
+    #[serde(rename = "Action")]
+    pub action: String,
+
+    #[serde(rename = "Actor")]
+    pub actor: EventActor,
+}
+
+// A Docker event actor
+#[derive(Deserialize, Serialize, Debug)]
+pub struct EventActor {
+    #[serde(rename = "Attributes")]
+    pub attributes: EventAttributes,
+}
+
+// Docker event actor attributes
+#[derive(Deserialize, Serialize, Debug)]
+pub struct EventAttributes {
+    pub image: String,
+}
+
 // Program entrypoint
 fn entry() -> io::Result<()> {
     // Determine whether to print colored output.
@@ -124,18 +174,76 @@ fn entry() -> io::Result<()> {
     let _settings = settings()?;
 
     // Try to load the state from disk.
-    info!("Attempting to load the state from disk\u{2026}");
-    let state = state::load().unwrap_or_else(|error| {
+    let mut state = state::load().unwrap_or_else(|error| {
         // We couldn't load any state from disk. Log the error.
-        error!("Unable to load state from disk. Details: {}", error);
+        info!(
+            "Unable to load state from disk. Proceeding with initial state. Details: {}",
+            error.to_string().code_str()
+        );
 
         // Start with the initial state.
         state::initial()
     });
 
-    // Persist the state.
-    info!("Persisting the state to disk\u{2026}");
-    state::save(&state)?;
+    // Spawn `docker events --format '{{json .}}'`.
+    let child = Command::new("docker")
+        .args(&["events", "--format", "{{json .}}"])
+        .stdout(Stdio::piped())
+        .spawn()?;
+
+    // Buffered output
+    let reader = BufReader::new(child.stdout.map_or_else(
+        || {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("Unable to read output from {}.", "docker events".code_str()),
+            ))
+        },
+        Ok,
+    )?);
+
+    // Handle each incoming event.
+    for line_option in reader.lines() {
+        // Unwrap the line.
+        let line = line_option?;
+        debug!("Incoming event: {}", line.code_str());
+
+        // Parse the line as an event.
+        let event: DockerEvent = match serde_json::from_str(&line) {
+            Ok(event) => {
+                debug!("Parsed as: {}", format!("{:?}", event).code_str());
+                event
+            }
+            Err(error) => {
+                debug!("Skipping due to: {}", error);
+                continue;
+            }
+        };
+
+        // Check the event type and action.
+        if event.r#type != "container" || event.action != "die" {
+            debug!("Skipping due to irrelevance.");
+            continue;
+        }
+
+        // Get the ID of the image.
+        let image_id = image_id(&event.actor.attributes.image)?;
+
+        // Update the timestamp for this image.
+        info!(
+            "Updating timestamp for image {}\u{2026}",
+            image_id.code_str()
+        );
+        match SystemTime::now().duration_since(UNIX_EPOCH) {
+            Ok(duration) => {
+                state.images.insert(image_id, duration);
+                state::save(&state)?;
+            }
+            Err(error) => {
+                return Err(io::Error::new(io::ErrorKind::Other, error));
+            }
+        }
+    }
 
     Ok(())
 }

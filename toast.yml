@@ -106,7 +106,7 @@ tasks:
     command: |
       set -euo pipefail
       . $HOME/.cargo/env
-      cargo run
+      cargo run -- --help
 
   check:
     dependencies:

@@ -1,6 +1,6 @@
 use colored::{control::SHOULD_COLORIZE, ColoredString, Colorize};
 
-// This trait has a function for formatting "code-like" text, such as a task name or a file path.
+// This trait has a function for formatting "code-like" text, such as an image name or a file path.
 // The reason it's implemented as a trait and not just a function is so we can use it with method
 // syntax, as in `x.code_str()`. Rust does not allow us to implement methods on primitive types
 // such as `str`.
