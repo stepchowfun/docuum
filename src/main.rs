@@ -1,13 +1,18 @@
-mod failure;
 mod format;
+mod state;
 
-use crate::{failure::Failure, format::CodeStr};
+use crate::format::CodeStr;
 use atty::Stream;
 use byte_unit::Byte;
 use clap::{App, AppSettings, Arg};
 use env_logger::{fmt::Color, Builder};
 use log::{Level, LevelFilter};
-use std::{env, io::Write, process::exit, str::FromStr};
+use std::{
+    env,
+    io::{self, Write},
+    process::exit,
+    str::FromStr,
+};
 
 #[macro_use]
 extern crate log;
@@ -66,7 +71,7 @@ pub struct Settings {
 }
 
 // Parse the command-line arguments.
-fn settings() -> Result<Settings, Failure> {
+fn settings() -> io::Result<Settings> {
     let matches = App::new("Docuum")
         .version(VERSION)
         .version_short("v")
@@ -80,7 +85,10 @@ fn settings() -> Result<Settings, Failure> {
                 .short("c")
                 .long(CAPACITY_ARG)
                 .value_name("CAPACITY")
-                .help("Sets the maximum amount of space used for Docker images (e.g., 30 GB)")
+                .help(&format!(
+                    "Sets the maximum amount of space to be used for Docker images (default: {})",
+                    DEFAULT_CAPACITY.code_str()
+                ))
                 .takes_value(true),
         )
         .get_matches();
@@ -91,7 +99,10 @@ fn settings() -> Result<Settings, Failure> {
         || Ok(default_capacity),
         |capacity| {
             Byte::from_str(capacity).map_err(|_| {
-                Failure::User(format!("Invalid capacity {}.", capacity.code_str()), None)
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("Invalid capacity {}.", capacity.code_str()),
+                )
             })
         },
     )?;
@@ -102,7 +113,7 @@ fn settings() -> Result<Settings, Failure> {
 }
 
 // Program entrypoint
-fn entry() -> Result<(), Failure> {
+fn entry() -> io::Result<()> {
     // Determine whether to print colored output.
     colored::control::set_override(atty::is(Stream::Stderr));
 
@@ -112,7 +123,20 @@ fn entry() -> Result<(), Failure> {
     // Parse the command-line arguments;
     let _settings = settings()?;
 
-    info!("Hello, world!");
+    // Try to load the state from disk.
+    info!("Attempting to load the state from disk\u{2026}");
+    let state = state::load().unwrap_or_else(|error| {
+        // We couldn't load any state from disk. Log the error.
+        error!("Unable to load state from disk. Details: {}", error);
+
+        // Start with the initial state.
+        state::initial()
+    });
+
+    // Persist the state.
+    info!("Persisting the state to disk\u{2026}");
+    state::save(&state)?;
+
     Ok(())
 }
 
