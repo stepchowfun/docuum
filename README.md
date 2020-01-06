@@ -2,9 +2,9 @@
 
 [![Build Status](https://travis-ci.org/stepchowfun/docuum.svg?branch=master)](https://travis-ci.org/stepchowfun/docuum)
 
-*Docuum* performs least recently used (LRU) eviction of Docker images to keep the total disk usage below a given threshold. Docker's build in `docker image prune` command is not ideal because it uses the image creation time, rather than the last usage time, to determine which images to remove.
+*Docuum* performs least recently used (LRU) eviction of Docker images to keep the total disk usage below a given threshold. Docker's built-in `docker image prune` command isn't ideal because it uses the image creation time, rather than the last usage time, to determine which images to remove.
 
-Docuum is ideal for use cases such as CI workers, development environments, or any other situation in which Docker images accumulate on disk over time.
+Docuum is ideal for use cases such as continuous integration workers, development environments, or any other situation in which Docker images accumulate on disk over time.
 
 ## Usage
 
