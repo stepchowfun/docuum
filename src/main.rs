@@ -204,21 +204,6 @@ pub fn images_in_use() -> io::Result<HashSet<String>> {
         .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
 }
 
-// Update the timestamp for an image.
-fn update_timestamp(state: &mut State, image_id: &str) -> io::Result<()> {
-    info!(
-        "Updating last-used timestamp for image {}\u{2026}",
-        image_id.code_str(),
-    );
-    match SystemTime::now().duration_since(UNIX_EPOCH) {
-        Ok(duration) => {
-            state.images.insert(image_id.to_owned(), duration);
-            state::save(&state)
-        }
-        Err(error) => Err(io::Error::new(io::ErrorKind::Other, error)),
-    }
-}
-
 // Get the total space used by Docker images.
 fn space_usage() -> io::Result<Byte> {
     // Query Docker for the space usage.
@@ -283,6 +268,21 @@ fn delete_image(image_id: &str) -> io::Result<()> {
     }
 
     Ok(())
+}
+
+// Update the timestamp for an image.
+fn update_timestamp(state: &mut State, image_id: &str) -> io::Result<()> {
+    info!(
+        "Updating last-used timestamp for image {}\u{2026}",
+        image_id.code_str(),
+    );
+    match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(duration) => {
+            state.images.insert(image_id.to_owned(), duration);
+            state::save(&state)
+        }
+        Err(error) => Err(io::Error::new(io::ErrorKind::Other, error)),
+    }
 }
 
 // The main vacuum logic
