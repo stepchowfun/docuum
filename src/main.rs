@@ -14,7 +14,7 @@ use std::{
     io::{self, BufRead, BufReader, Write},
     process::{exit, Command, Stdio},
     str::FromStr,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 #[macro_use]
@@ -230,6 +230,17 @@ fn vacuum(state: &mut State) -> io::Result<()> {
         );
         image_ids.contains(image_id)
     });
+
+    // Add any missing images to `state`.
+    for image_id in image_ids {
+        state.images.entry(image_id.clone()).or_insert_with(|| {
+            debug!(
+                "Adding record for missing image {}\u{2026}",
+                &image_id.code_str()
+            );
+            Duration::new(0, 0)
+        });
+    }
 
     // Update the timestamps of any images in use.
     for image in images_in_use()? {
