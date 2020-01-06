@@ -1,13 +1,13 @@
+mod docker;
 mod format;
 mod state;
 
-use crate::format::CodeStr;
+use crate::{docker::Event, format::CodeStr, state::State};
 use atty::Stream;
 use byte_unit::Byte;
 use clap::{App, AppSettings, Arg};
 use env_logger::{fmt::Color, Builder};
 use log::{Level, LevelFilter};
-use serde::{Deserialize, Serialize};
 use std::{
     env,
     io::{self, BufRead, BufReader, Write},
@@ -28,6 +28,11 @@ const DEFAULT_CAPACITY: &str = "10 GiB";
 
 // Command-line argument and option names
 const CAPACITY_ARG: &str = "capacity";
+
+// This struct represents the command-line arguments.
+pub struct Settings {
+    _capacity: Byte,
+}
 
 // Set up the logger.
 fn set_up_logging() {
@@ -65,11 +70,6 @@ fn set_up_logging() {
             )
         })
         .init();
-}
-
-// This struct represents the command-line arguments.
-pub struct Settings {
-    _capacity: Byte,
 }
 
 // Parse the command-line arguments.
@@ -136,30 +136,29 @@ pub fn image_id(image: &str) -> io::Result<String> {
         .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
 }
 
-// A Docker event
-#[derive(Deserialize, Serialize, Debug)]
-pub struct DockerEvent {
-    #[serde(rename = "Type")]
-    pub r#type: String,
-
-    #[serde(rename = "Action")]
-    pub action: String,
-
-    #[serde(rename = "Actor")]
-    pub actor: EventActor,
+// Update the timestamp for an image.
+fn update_timestamp(state: &mut State, image_id: &str) -> io::Result<()> {
+    info!(
+        "Updating last-used timestamp for image {}\u{2026}",
+        image_id.code_str()
+    );
+    match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(duration) => {
+            state.images.insert(image_id.to_owned(), duration);
+            state::save(&state)
+        }
+        Err(error) => Err(io::Error::new(io::ErrorKind::Other, error)),
+    }
 }
 
-// A Docker event actor
-#[derive(Deserialize, Serialize, Debug)]
-pub struct EventActor {
-    #[serde(rename = "Attributes")]
-    pub attributes: EventAttributes,
-}
+// The main vacuum logic
+fn vacuum(_state: &mut State) -> io::Result<()> {
+    info!("Vacuuming\u{2026}");
+    // TODO: Remove non-existent images from `state`.
+    // TODO: Update the timestamps of the images for running containers.
+    // TODO: Prune!
 
-// Docker event actor attributes
-#[derive(Deserialize, Serialize, Debug)]
-pub struct EventAttributes {
-    pub image: String,
+    Ok(())
 }
 
 // Program entrypoint
@@ -176,7 +175,7 @@ fn entry() -> io::Result<()> {
     // Try to load the state from disk.
     let mut state = state::load().unwrap_or_else(|error| {
         // We couldn't load any state from disk. Log the error.
-        info!(
+        debug!(
             "Unable to load state from disk. Proceeding with initial state. Details: {}",
             error.to_string().code_str()
         );
@@ -184,6 +183,9 @@ fn entry() -> io::Result<()> {
         // Start with the initial state.
         state::initial()
     });
+
+    // Run the main vacuum logic.
+    vacuum(&mut state)?;
 
     // Spawn `docker events --format '{{json .}}'`.
     let child = Command::new("docker")
@@ -203,13 +205,14 @@ fn entry() -> io::Result<()> {
     )?);
 
     // Handle each incoming event.
+    info!("Listening for Docker events\u{2026}");
     for line_option in reader.lines() {
         // Unwrap the line.
         let line = line_option?;
         debug!("Incoming event: {}", line.code_str());
 
         // Parse the line as an event.
-        let event: DockerEvent = match serde_json::from_str(&line) {
+        let event: Event = match serde_json::from_str(&line) {
             Ok(event) => {
                 debug!("Parsed as: {}", format!("{:?}", event).code_str());
                 event
@@ -230,19 +233,10 @@ fn entry() -> io::Result<()> {
         let image_id = image_id(&event.actor.attributes.image)?;
 
         // Update the timestamp for this image.
-        info!(
-            "Updating timestamp for image {}\u{2026}",
-            image_id.code_str()
-        );
-        match SystemTime::now().duration_since(UNIX_EPOCH) {
-            Ok(duration) => {
-                state.images.insert(image_id, duration);
-                state::save(&state)?;
-            }
-            Err(error) => {
-                return Err(io::Error::new(io::ErrorKind::Other, error));
-            }
-        }
+        update_timestamp(&mut state, &image_id)?;
+
+        // Run the main vacuum logic.
+        vacuum(&mut state)?;
     }
 
     Ok(())
