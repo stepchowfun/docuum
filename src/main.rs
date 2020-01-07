@@ -12,6 +12,7 @@ use byte_unit::Byte;
 use clap::{App, AppSettings, Arg};
 use env_logger::{fmt::Color, Builder};
 use log::{Level, LevelFilter};
+use scopeguard::guard;
 use std::{
     collections::HashSet,
     env,
@@ -379,13 +380,18 @@ fn run(settings: &Settings, state: &mut State) -> io::Result<()> {
     vacuum(state, &settings.threshold)?;
 
     // Spawn `docker events --format '{{json .}}'`.
-    let child = Command::new("docker")
-        .args(&["events", "--format", "{{json .}}"])
-        .stdout(Stdio::piped())
-        .spawn()?;
+    let mut child = guard(
+        Command::new("docker")
+            .args(&["events", "--format", "{{json .}}"])
+            .stdout(Stdio::piped())
+            .spawn()?,
+        |mut child| {
+            let _ = child.kill();
+        },
+    );
 
-    // Buffered output
-    let reader = BufReader::new(child.stdout.map_or_else(
+    // Buffer the data as we read it line-by-line.
+    let reader = BufReader::new(child.stdout.as_mut().map_or_else(
         || {
             Err(io::Error::new(
                 io::ErrorKind::Other,
