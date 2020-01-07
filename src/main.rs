@@ -70,7 +70,7 @@ fn set_up_logging() {
             writeln!(
                 buf,
                 "{} {}",
-                style.value(format!("[{}]", record.level())),
+                style.value(format!("[{} {}]", buf.timestamp(), record.level())),
                 record.args().to_string()
             )
         })
