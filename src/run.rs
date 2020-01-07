@@ -99,10 +99,8 @@ pub fn image_ids() -> io::Result<HashSet<String>> {
         .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
 }
 
-// Ask Docker for the images used by any existing containers. It's not clear from the Docker
-// documentation whether the results are image IDs (vs. tags or something else), so don't assume
-// the results are IDs.
-pub fn images_in_use() -> io::Result<HashSet<String>> {
+// Ask Docker for the IDs of the images currently in use by containers.
+pub fn image_ids_in_use() -> io::Result<HashSet<String>> {
     // Query Docker for the image IDs.
     let output = Command::new("docker")
         .args(&[
@@ -120,20 +118,25 @@ pub fn images_in_use() -> io::Result<HashSet<String>> {
     if !output.status.success() {
         return Err(io::Error::new(
             io::ErrorKind::Other,
-            "Unable to determine IDs of all images.",
+            "Unable to determine IDs of images currently in use by containers.",
         ));
     }
 
     // Decode the output bytes into UTF-8 and collect the lines.
     String::from_utf8(output.stdout)
-        .map(|output| {
+        .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
+        .and_then(|output| {
             output
                 .lines()
-                .map(|line| line.trim().to_owned())
-                .filter(|line| !line.is_empty())
+                .filter_map(|line| {
+                    if line.is_empty() {
+                        None
+                    } else {
+                        Some(image_id(line.trim()))
+                    }
+                })
                 .collect()
         })
-        .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
 }
 
 // Get the total space used by Docker images.
@@ -148,7 +151,7 @@ fn space_usage() -> io::Result<Byte> {
     if !output.status.success() {
         return Err(io::Error::new(
             io::ErrorKind::Other,
-            "Unable to determine IDs of all images.",
+            "Unable to determine the disk space used by Docker images.",
         ));
     }
 
@@ -219,7 +222,7 @@ fn update_timestamp(state: &mut State, image_id: &str, verbose: bool) -> io::Res
     match SystemTime::now().duration_since(UNIX_EPOCH) {
         Ok(duration) => {
             state.images.insert(image_id.to_owned(), duration);
-            state::save(&state)
+            Ok(())
         }
         Err(error) => Err(io::Error::new(io::ErrorKind::Other, error)),
     }
@@ -235,11 +238,15 @@ fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
 
     // Remove non-existent images from `state`.
     state.images.retain(|image_id, _| {
-        debug!(
-            "Removing record for non-existent image {}\u{2026}",
-            image_id.code_str(),
-        );
-        image_ids.contains(image_id)
+        if image_ids.contains(image_id) {
+            true
+        } else {
+            debug!(
+                "Removing record for non-existent image {}\u{2026}",
+                image_id.code_str(),
+            );
+            false
+        }
     });
 
     // Add any missing images to `state`.
@@ -254,11 +261,7 @@ fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
     }
 
     // Update the timestamps of any images in use.
-    for image in images_in_use()? {
-        // Get the ID of the image.
-        let image_id = image_id(&image)?;
-
-        // Update the timestamp for this image.
+    for image_id in image_ids_in_use()? {
         update_timestamp(state, &image_id, false)?;
     }
 
@@ -309,7 +312,7 @@ fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
         );
     }
 
-    // Persist the state.
+    // Persist the state [tag:vacuum-persists-state].
     state::save(&state)?;
 
     // Inform the user that we're done for now.
@@ -375,7 +378,7 @@ pub fn run(settings: &Settings, state: &mut State) -> io::Result<()> {
         // Update the timestamp for this image.
         update_timestamp(state, &image_id, true)?;
 
-        // Run the main vacuum logic.
+        // Run the main vacuum logic. This will also persist the state [ref:vacuum-persists-state].
         vacuum(state, &settings.threshold)?;
     }
 
