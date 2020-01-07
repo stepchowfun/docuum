@@ -48,7 +48,7 @@ pub fn load() -> io::Result<State> {
         // Fail if we don't have a path.
         Err(io::Error::new(
             io::ErrorKind::Other,
-            "Unable to locate data directory. State not loaded from disk.",
+            "Unable to locate data directory.",
         ))
     }
 }
@@ -78,7 +78,7 @@ pub fn save(state: &State) -> io::Result<()> {
         // Fail if we don't have a path.
         return Err(io::Error::new(
             io::ErrorKind::Other,
-            "Unable to locate data directory. State not persisted to disk.",
+            "Unable to locate data directory.",
         ));
     }
 
