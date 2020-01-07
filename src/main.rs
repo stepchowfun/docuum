@@ -18,6 +18,7 @@ use std::{
     io::{self, BufRead, BufReader, Write},
     process::{exit, Command, Stdio},
     str::FromStr,
+    thread::sleep,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -372,31 +373,10 @@ fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
     state::save(&state)
 }
 
-// Program entrypoint
-fn entry() -> io::Result<()> {
-    // Determine whether to print colored output.
-    colored::control::set_override(atty::is(Stream::Stderr));
-
-    // Set up the logger.
-    set_up_logging();
-
-    // Parse the command-line arguments;
-    let settings = settings()?;
-
-    // Try to load the state from disk.
-    let mut state = state::load().unwrap_or_else(|error| {
-        // We couldn't load any state from disk. Log the error.
-        debug!(
-            "Unable to load state from disk. Proceeding with initial state. Details: {}",
-            error.to_string().code_str()
-        );
-
-        // Start with the initial state.
-        state::initial()
-    });
-
+// Stream Docker events and vacuum when necessary.
+fn run(settings: &Settings, state: &mut State) -> io::Result<()> {
     // Run the main vacuum logic.
-    vacuum(&mut state, &settings.threshold)?;
+    vacuum(state, &settings.threshold)?;
 
     // Spawn `docker events --format '{{json .}}'`.
     let child = Command::new("docker")
@@ -444,13 +424,50 @@ fn entry() -> io::Result<()> {
         let image_id = image_id(&event.actor.attributes.image)?;
 
         // Update the timestamp for this image.
-        update_timestamp(&mut state, &image_id)?;
+        update_timestamp(state, &image_id)?;
 
         // Run the main vacuum logic.
-        vacuum(&mut state, &settings.threshold)?;
+        vacuum(state, &settings.threshold)?;
     }
 
-    Ok(())
+    // The `for` loop above will only terminate if something happened to `docker events`.
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        format!("{} unexpectedly terminated.", "docker events".code_str()),
+    ))
+}
+
+// Program entrypoint
+fn entry() -> io::Result<()> {
+    // Determine whether to print colored output.
+    colored::control::set_override(atty::is(Stream::Stderr));
+
+    // Set up the logger.
+    set_up_logging();
+
+    // Parse the command-line arguments;
+    let settings = settings()?;
+
+    // Try to load the state from disk.
+    let mut state = state::load().unwrap_or_else(|error| {
+        // We couldn't load any state from disk. Log the error.
+        debug!(
+            "Unable to load state from disk. Proceeding with initial state. Details: {}",
+            error.to_string().code_str()
+        );
+
+        // Start with the initial state.
+        state::initial()
+    });
+
+    // Stream Docker events and vacuum when necessary. Restart if an error occurs.
+    loop {
+        if let Err(e) = run(&settings, &mut state) {
+            error!("{}", e);
+            info!("Restarting\u{2026}");
+            sleep(Duration::from_secs(1));
+        }
+    }
 }
 
 // Let the fun begin!
