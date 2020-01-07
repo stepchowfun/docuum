@@ -29,7 +29,7 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 // Defaults
 const DEFAULT_LOG_LEVEL: LevelFilter = LevelFilter::Info;
-const DEFAULT_THRESHOLD: &str = "10 GiB";
+const DEFAULT_THRESHOLD: &str = "10 GB";
 
 // Command-line argument and option names
 const THRESHOLD_ARG: &str = "threshold";
@@ -338,8 +338,8 @@ fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
         info!(
             "Some images need to be deleted. The images are currently taking up {} but the limit \
              is set to {}.",
-            space.get_appropriate_unit(true).to_string().code_str(),
-            threshold.get_appropriate_unit(true).to_string().code_str(),
+            space.get_appropriate_unit(false).to_string().code_str(),
+            threshold.get_appropriate_unit(false).to_string().code_str(),
         );
 
         // Start deleting images, starting with the least recently used.
@@ -349,8 +349,8 @@ fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
             if new_space <= *threshold {
                 info!(
                     "The images are now taking up {}, which is under the limit of {}.",
-                    new_space.get_appropriate_unit(true).to_string().code_str(),
-                    threshold.get_appropriate_unit(true).to_string().code_str(),
+                    new_space.get_appropriate_unit(false).to_string().code_str(),
+                    threshold.get_appropriate_unit(false).to_string().code_str(),
                 );
                 break;
             }
@@ -363,8 +363,8 @@ fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
     } else {
         info!(
             "The images are taking up {}, which is under the limit of {}.",
-            space.get_appropriate_unit(true).to_string().code_str(),
-            threshold.get_appropriate_unit(true).to_string().code_str(),
+            space.get_appropriate_unit(false).to_string().code_str(),
+            threshold.get_appropriate_unit(false).to_string().code_str(),
         );
     }
 

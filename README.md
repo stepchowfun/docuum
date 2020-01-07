@@ -24,7 +24,7 @@ Docuum is meant to be started once and run forever, rather than as a cron job. H
 Running Docuum from the command line is as simple as:
 
 ```sh
-$ docuum --threshold '30 GiB'
+$ docuum --threshold '30 GB'
 ```
 
 Here are the supported command-line options:
@@ -35,7 +35,7 @@ USAGE:
 
 OPTIONS:
     -c, --threshold <THRESHOLD>
-            Sets the maximum amount of space to be used for Docker images (default: 10 GiB)
+            Sets the maximum amount of space to be used for Docker images (default: 10 GB)
 
     -h, --help
             Prints help information
