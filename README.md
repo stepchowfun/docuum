@@ -6,26 +6,58 @@
 
 Docker's built-in `docker image prune --filter until=…` command serves a similar purpose. However, the built-in solution isn't ideal since it uses the image creation time, rather than the last usage time, to determine which images to remove. That means it can delete frequently used images, and these may take a long time to build.
 
-Docuum is ideal for use cases such as continuous integration workers, development environments, or any other situation in which Docker images accumulate on disk over time. Docuum works well with [Toast](https://github.com/stepchowfun/toast) or [Docker Compose](https://docs.docker.com/compose/).
+Docuum is ideal for use cases such as continuous integration workers, development environments, or any other situation in which Docker images accumulate on disk over time. Docuum works well with [Toast](https://github.com/stepchowfun/toast) and [Docker Compose](https://docs.docker.com/compose/).
 
 ## How it works
 
 [Docker doesn't record when an image was last used.](https://github.com/moby/moby/issues/4237) To work around this, Docuum listens for notifications via `docker events` to learn when images are used. It maintains a small piece of state in a local data directory (see [this](https://docs.rs/dirs/2.0.2/dirs/fn.data_local_dir.html) for details about where this directory is on various platforms). That persisted state allows you to freely restart Docuum (or the whole machine) without losing the image usage timestamp data.
 
-When Docuum first starts and subsequently whenever a new Docker event comes in, LRU eviction is performed until the total disk usage due to Docker images is below the given threshold. This design has two advantages:
+When Docuum first starts and subsequently whenever a new Docker event comes in, LRU eviction is performed until the total disk usage due to Docker images is below the given threshold. This design has two advantages over [time to live](https://en.wikipedia.org/wiki/Time_to_live) (TTL) schemes:
 
 1. There is no need to configure and tune an interval to run on. Docuum evicts images immediately whenever the disk usage exceeds the threshold without waiting for any timers.
 2. Docuum uses no CPU resources when there is no Docker activity. You can run it on your laptop without worrying about draining your battery.
 
 ## Usage
 
-Docuum is meant to be started once and run forever, rather than as a cron job. How you do this is up to you. For example, you can run it in a terminal, or you can set it up as a daemon with [launchd](https://www.launchd.info/), [systemd](https://www.freedesktop.org/wiki/Software/systemd/), etc.
-
-Running Docuum from the command line is as simple as:
+Docuum is meant to be started once and run forever, rather than as a cron job. Once Docuum is [installed](#installation), you can run it from the command line as follows:
 
 ```sh
 $ docuum --threshold '30 GB'
 ```
+
+You probably want to run Docuum as a daemon, e.g., with [launchd](https://www.launchd.info/), [systemd](https://www.freedesktop.org/wiki/Software/systemd/), etc. You may consult your operating system documentation for instructions on how to do that. For macOS, for example, you can create a file (owned by root) called `/Library/LaunchDaemons/local.docuum.plist` with the following:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+    <dict>
+        <key>Label</key>
+        <string>local.docuum</string>
+        <key>Program</key>
+        <string>/usr/local/bin/docuum</string>
+        <key>ProgramArguments</key>
+        <array>
+            <string>/usr/local/bin/docuum</string>
+            <string>--threshold</string>
+            <string>10 GB</string>
+        </array>
+        <key>StandardOutPath</key>
+        <string>/var/log/docuum.log</string>
+        <key>StandardErrorPath</key>
+        <string>/var/log/docuum.log</string>
+        <key>EnvironmentVariables</key>
+        <dict>
+            <key>PATH</key>
+            <string>/bin:/usr/bin:/usr/local/bin</string>
+        </dict>
+        <key>KeepAlive</key>
+        <true/>
+    </dict>
+</plist>
+```
+
+Now Docuum will start automatically when you restart your machine, and the logs can be found at `/var/log/docuum.log`. If you do not wish to restart your machine, you can run `sudo launchctl load /Library/LaunchDaemons/local.docuum.plist` to start the daemon.
 
 Here are the supported command-line options:
 
