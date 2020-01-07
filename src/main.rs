@@ -29,14 +29,14 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 // Defaults
 const DEFAULT_LOG_LEVEL: LevelFilter = LevelFilter::Info;
-const DEFAULT_CAPACITY: &str = "10 GiB";
+const DEFAULT_THRESHOLD: &str = "10 GiB";
 
 // Command-line argument and option names
-const CAPACITY_ARG: &str = "capacity";
+const THRESHOLD_ARG: &str = "threshold";
 
 // This struct represents the command-line arguments.
 pub struct Settings {
-    capacity: Byte,
+    threshold: Byte,
 }
 
 // Set up the logger.
@@ -88,33 +88,33 @@ fn settings() -> io::Result<Settings> {
         .setting(AppSettings::NextLineHelp)
         .setting(AppSettings::UnifiedHelpMessage)
         .arg(
-            Arg::with_name(CAPACITY_ARG)
+            Arg::with_name(THRESHOLD_ARG)
                 .short("c")
-                .long(CAPACITY_ARG)
-                .value_name("CAPACITY")
+                .long(THRESHOLD_ARG)
+                .value_name("THRESHOLD")
                 .help(&format!(
                     "Sets the maximum amount of space to be used for Docker images (default: {})",
-                    DEFAULT_CAPACITY.code_str()
+                    DEFAULT_THRESHOLD.code_str()
                 ))
                 .takes_value(true),
         )
         .get_matches();
 
-    // Read the capacity.
-    let default_capacity = Byte::from_str(DEFAULT_CAPACITY).unwrap(); // Manually verified safe
-    let capacity = matches.value_of(CAPACITY_ARG).map_or_else(
-        || Ok(default_capacity),
-        |capacity| {
-            Byte::from_str(capacity).map_err(|_| {
+    // Read the threshold.
+    let default_threshold = Byte::from_str(DEFAULT_THRESHOLD).unwrap(); // Manually verified safe
+    let threshold = matches.value_of(THRESHOLD_ARG).map_or_else(
+        || Ok(default_threshold),
+        |threshold| {
+            Byte::from_str(threshold).map_err(|_| {
                 io::Error::new(
                     io::ErrorKind::Other,
-                    format!("Invalid capacity {}.", capacity.code_str()),
+                    format!("Invalid threshold {}.", threshold.code_str()),
                 )
             })
         },
     )?;
 
-    Ok(Settings { capacity })
+    Ok(Settings { threshold })
 }
 
 // Ask Docker for the ID of an image.
@@ -232,7 +232,7 @@ fn space_usage() -> io::Result<Byte> {
                         return Byte::from_str(&space_record.size).map_err(|_| {
                             io::Error::new(
                                 io::ErrorKind::Other,
-                                format!("Invalid capacity {}.", space_record.size.code_str()),
+                                format!("Invalid threshold {}.", space_record.size.code_str()),
                             )
                         });
                     }
@@ -286,7 +286,7 @@ fn update_timestamp(state: &mut State, image_id: &str) -> io::Result<()> {
 }
 
 // The main vacuum logic
-fn vacuum(state: &mut State, capacity: &Byte) -> io::Result<()> {
+fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
     info!("Vacuuming\u{2026}");
 
     // Determine all the image IDs.
@@ -332,25 +332,25 @@ fn vacuum(state: &mut State, capacity: &Byte) -> io::Result<()> {
             .cmp(state.images.get(y).unwrap())
     });
 
-    // Check if we're over capacity.
+    // Check if we're over threshold.
     let space = space_usage()?;
-    if space > *capacity {
+    if space > *threshold {
         info!(
             "Some images need to be deleted. The images are currently taking up {} but the limit \
              is set to {}.",
             space.get_appropriate_unit(true).to_string().code_str(),
-            capacity.get_appropriate_unit(true).to_string().code_str(),
+            threshold.get_appropriate_unit(true).to_string().code_str(),
         );
 
         // Start deleting images, starting with the least recently used.
         for image_id in image_ids_vec {
             // Break if we're under the threshold.
             let new_space = space_usage()?;
-            if new_space <= *capacity {
+            if new_space <= *threshold {
                 info!(
                     "The images are now taking up {}, which is under the limit of {}.",
                     new_space.get_appropriate_unit(true).to_string().code_str(),
-                    capacity.get_appropriate_unit(true).to_string().code_str(),
+                    threshold.get_appropriate_unit(true).to_string().code_str(),
                 );
                 break;
             }
@@ -364,7 +364,7 @@ fn vacuum(state: &mut State, capacity: &Byte) -> io::Result<()> {
         info!(
             "The images are taking up {}, which is under the limit of {}.",
             space.get_appropriate_unit(true).to_string().code_str(),
-            capacity.get_appropriate_unit(true).to_string().code_str(),
+            threshold.get_appropriate_unit(true).to_string().code_str(),
         );
     }
 
@@ -396,7 +396,7 @@ fn entry() -> io::Result<()> {
     });
 
     // Run the main vacuum logic.
-    vacuum(&mut state, &settings.capacity)?;
+    vacuum(&mut state, &settings.threshold)?;
 
     // Spawn `docker events --format '{{json .}}'`.
     let child = Command::new("docker")
@@ -447,7 +447,7 @@ fn entry() -> io::Result<()> {
         update_timestamp(&mut state, &image_id)?;
 
         // Run the main vacuum logic.
-        vacuum(&mut state, &settings.capacity)?;
+        vacuum(&mut state, &settings.threshold)?;
     }
 
     Ok(())
