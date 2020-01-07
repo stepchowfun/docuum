@@ -4,7 +4,7 @@
 
 *Docuum* performs least recently used (LRU) eviction of Docker images to keep the total disk usage below a given threshold.
 
-Docker's built-in `docker image prune --filter until=...` command serves a similar purpose. However, the built-in solution isn't ideal since it uses the image creation time, rather than the last usage time, to determine which images to remove. That means it can delete frequently used images, and these may take a long time to build.
+Docker's built-in `docker image prune --filter until=…` command serves a similar purpose. However, the built-in solution isn't ideal since it uses the image creation time, rather than the last usage time, to determine which images to remove. That means it can delete frequently used images, and these may take a long time to build.
 
 Docuum is ideal for use cases such as continuous integration workers, development environments, or any other situation in which Docker images accumulate on disk over time. Docuum works well with [Toast](https://github.com/stepchowfun/toast) or [Docker Compose](https://docs.docker.com/compose/).
 
@@ -19,7 +19,9 @@ When Docuum starts and whenever a new Docker event comes in, LRU eviction is per
 
 ## Usage
 
-Docuum is meant to be started once and run forever, rather than as a cron job. You can run it like this:
+Docuum is meant to be started once and run forever, rather than as a cron job. How you do this is up to you. For example, you can run it in a terminal, or you can set it up as a daemon with [launchd](https://www.launchd.info/), [systemd](https://www.freedesktop.org/wiki/Software/systemd/), etc.
+
+Running Docuum from the command line is as simple as:
 
 ```sh
 $ docuum --threshold '30 GiB'
