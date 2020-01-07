@@ -34,11 +34,11 @@ USAGE:
     docuum
 
 OPTIONS:
-    -c, --threshold <THRESHOLD>
-            Sets the maximum amount of space to be used for Docker images (default: 10 GB)
-
     -h, --help
             Prints help information
+
+    -t, --threshold <THRESHOLD>
+            Sets the maximum amount of space to be used for Docker images (default: 10 GB)
 
     -v, --version
             Prints version information

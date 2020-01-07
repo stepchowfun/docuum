@@ -89,7 +89,7 @@ fn settings() -> io::Result<Settings> {
         .setting(AppSettings::UnifiedHelpMessage)
         .arg(
             Arg::with_name(THRESHOLD_ARG)
-                .short("c")
+                .short("t")
                 .long(THRESHOLD_ARG)
                 .value_name("THRESHOLD")
                 .help(&format!(
