@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/stepchowfun/docuum.svg?branch=master)](https://travis-ci.org/stepchowfun/docuum)
 
-*Docuum* performs least recently used (LRU) eviction of Docker images to keep the total disk usage below a given threshold.
+*Docuum* performs least recently used (LRU) eviction of Docker images to keep the disk usage below a given threshold.
 
 Docker's built-in `docker image prune --filter until=…` command serves a similar purpose. However, the built-in solution isn't ideal since it uses the image creation time, rather than the last usage time, to determine which images to remove. That means it can delete frequently used images, and these may take a long time to build.
 
@@ -10,11 +10,11 @@ Docuum is ideal for use cases such as continuous integration workers, developmen
 
 ## How it works
 
-[Docker doesn't record when an image is last used.](https://github.com/moby/moby/issues/4237) To work around this, Docuum listens for notifications via `docker events` to learn when images are used. It maintains a small piece of state in a local data directory (see [this](https://docs.rs/dirs/2.0.2/dirs/fn.data_local_dir.html) for details about where this directory is on various platforms). That persisted state allows you to restart Docuum without losing the image usage timestamp data.
+[Docker doesn't record when an image was last used.](https://github.com/moby/moby/issues/4237) To work around this, Docuum listens for notifications via `docker events` to learn when images are used. It maintains a small piece of state in a local data directory (see [this](https://docs.rs/dirs/2.0.2/dirs/fn.data_local_dir.html) for details about where this directory is on various platforms). That persisted state allows you to freely restart Docuum (or the whole machine) without losing the image usage timestamp data.
 
-When Docuum starts and whenever a new Docker event comes in, LRU eviction is performed until the total disk usage due to Docker images is below the given threshold. This design has two advantages:
+When Docuum first starts and subsequently whenever a new Docker event comes in, LRU eviction is performed until the total disk usage due to Docker images is below the given threshold. This design has two advantages:
 
-1. There is no need to configure an interval to run on. Docuum evicts images whenever the disk usage exceeds the threshold—no more, no less.
+1. There is no need to configure and tune an interval to run on. Docuum evicts images immediately whenever the disk usage exceeds the threshold without waiting for any timers.
 2. Docuum uses no CPU resources when there is no Docker activity. You can run it on your laptop without worrying about draining your battery.
 
 ## Usage
