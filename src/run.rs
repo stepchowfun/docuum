@@ -65,7 +65,7 @@ pub fn image_id(image: &str) -> io::Result<String> {
         ));
     }
 
-    // Decode the output bytes into UTF-8 and trim any leading/trailing whitespace.
+    // Interpret the output bytes as UTF-8 and trim any leading/trailing whitespace.
     String::from_utf8(output.stdout)
         .map(|output| output.trim().to_owned())
         .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
@@ -87,7 +87,7 @@ pub fn image_ids() -> io::Result<HashSet<String>> {
         ));
     }
 
-    // Decode the output bytes into UTF-8 and collect the lines.
+    // Interpret the output bytes as UTF-8 and collect the lines.
     String::from_utf8(output.stdout)
         .map(|output| {
             output
@@ -122,7 +122,7 @@ pub fn image_ids_in_use() -> io::Result<HashSet<String>> {
         ));
     }
 
-    // Decode the output bytes into UTF-8 and collect the lines.
+    // Interpret the output bytes as UTF-8 and collect the lines.
     String::from_utf8(output.stdout)
         .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
         .and_then(|output| {
