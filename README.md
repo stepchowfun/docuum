@@ -4,7 +4,7 @@
 
 *Docuum* performs least recently used (LRU) eviction of Docker images to keep the disk usage below a given threshold.
 
-Docker's built-in `docker image prune --filter until=…` command serves a similar purpose. However, the built-in solution isn't ideal since it uses the image creation time, rather than the last usage time, to determine which images to remove. That means it can delete frequently used images, and these may take a long time to build.
+Docker's built-in `docker image prune --all --filter until=…` command serves a similar purpose. However, the built-in solution isn't ideal since it uses the image creation time, rather than the last usage time, to determine which images to remove. That means it can delete frequently used images, and these may take a long time to build.
 
 Docuum is ideal for use cases such as continuous integration workers, development environments, or any other situation in which Docker images accumulate on disk over time. Docuum works well with [Toast](https://github.com/stepchowfun/toast) and [Docker Compose](https://docs.docker.com/compose/).
 
@@ -120,3 +120,4 @@ You can run that command with `--force` to update an existing installation.
 ## Requirements
 
 - Docuum requires [Docker Engine](https://www.docker.com/products/container-runtime) 17.03.0 or later.
+  - If you are using Docker Engine 18.09.0 or later with [BuildKit mode](https://docs.docker.com/develop/develop-images/build_enhancements/) enabled, Docker distinguishes between layers for intermediate build steps ("build cache") versus actual images. Docuum will only clean up images. BuildKit's built-in garbage collection feature can be used for the build cache. If you are not using BuildKit mode, there is no distinction between images and build cache layers, and Docuum will happily clean up both.
