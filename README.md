@@ -6,7 +6,7 @@
 
 Docker's built-in `docker image prune --all --filter until=…` command serves a similar purpose. However, the built-in solution isn't ideal since it uses the image creation time, rather than the last usage time, to determine which images to remove. That means it can delete frequently used images, and these may take a long time to build.
 
-Docuum is ideal for use cases such as continuous integration workers, development environments, or any other situation in which Docker images accumulate on disk over time. Docuum works well with [Toast](https://github.com/stepchowfun/toast) and [Docker Compose](https://docs.docker.com/compose/).
+Docuum is ideal for use cases such as continuous integration workers, development environments, or any other situation in which Docker images accumulate on disk over time. Docuum works well with tools like [Toast](https://github.com/stepchowfun/toast) and [Docker Compose](https://docs.docker.com/compose/).
 
 ## How it works
 
