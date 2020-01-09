@@ -24,6 +24,8 @@ struct Event {
 
     #[serde(rename = "Actor")]
     pub actor: EventActor,
+
+    pub id: String,
 }
 
 // A Docker event actor
@@ -36,7 +38,7 @@ struct EventActor {
 // Docker event actor attributes
 #[derive(Deserialize, Serialize, Debug)]
 struct EventActorAttributes {
-    pub image: String,
+    pub image: Option<String>,
 }
 
 // A line of output from `docker system df --format '{{json .}}'`
@@ -366,14 +368,20 @@ pub fn run(settings: &Settings, state: &mut State) -> io::Result<()> {
             }
         };
 
-        // Check the event type and action.
-        if event.r#type != "container" || event.action != "die" {
+        // Get the ID of the image.
+        let image_id = image_id(&if event.r#type == "container" && event.action == "die" {
+            if let Some(image_name) = event.actor.attributes.image {
+                image_name
+            } else {
+                debug!("Invalid Docker event.");
+                continue;
+            }
+        } else if event.r#type == "image" && event.action == "pull" {
+            event.id
+        } else {
             debug!("Skipping due to irrelevance.");
             continue;
-        }
-
-        // Get the ID of the image.
-        let image_id = image_id(&event.actor.attributes.image)?;
+        })?;
 
         // Update the timestamp for this image.
         update_timestamp(state, &image_id, true)?;
