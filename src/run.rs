@@ -376,7 +376,9 @@ pub fn run(settings: &Settings, state: &mut State) -> io::Result<()> {
                 debug!("Invalid Docker event.");
                 continue;
             }
-        } else if event.r#type == "image" && event.action == "pull" {
+        } else if event.r#type == "image"
+            && (event.action == "import" || event.action == "load" || event.action == "pull")
+        {
             event.id
         } else {
             debug!("Skipping due to irrelevance.");
