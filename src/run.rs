@@ -369,21 +369,23 @@ pub fn run(settings: &Settings, state: &mut State) -> io::Result<()> {
         };
 
         // Get the ID of the image.
-        let image_id = image_id(&if event.r#type == "container" && event.action == "die" {
-            if let Some(image_name) = event.actor.attributes.image {
-                image_name
+        let image_id = image_id(
+            &if event.r#type == "container" && event.action == "destroy" {
+                if let Some(image_name) = event.actor.attributes.image {
+                    image_name
+                } else {
+                    debug!("Invalid Docker event.");
+                    continue;
+                }
+            } else if event.r#type == "image"
+                && (event.action == "import" || event.action == "load" || event.action == "pull")
+            {
+                event.id
             } else {
-                debug!("Invalid Docker event.");
+                debug!("Skipping due to irrelevance.");
                 continue;
-            }
-        } else if event.r#type == "image"
-            && (event.action == "import" || event.action == "load" || event.action == "pull")
-        {
-            event.id
-        } else {
-            debug!("Skipping due to irrelevance.");
-            continue;
-        })?;
+            },
+        )?;
 
         // Update the timestamp for this image.
         update_timestamp(state, &image_id, true)?;
