@@ -80,7 +80,7 @@ OPTIONS:
 
 ### Running Docuum in a Docker container
 
-If you prefer not to install Docuum on your system, you can run it in a container. To run it in the foreground:
+If you prefer not to install Docuum on your system, you can run it in a container. To run it in the foreground, you can use a command like the following:
 
 ```sh
 docker run \
@@ -89,7 +89,7 @@ docker run \
   --tty \
   --volume /var/run/docker.sock:/var/run/docker.sock \
   --volume docuum:/root \
-  stephanmisc/docuum
+  stephanmisc/docuum --threshold '15 GB'
 ```
 
 To run it in the background:
@@ -101,7 +101,7 @@ docker run \
   --rm \
   --volume /var/run/docker.sock:/var/run/docker.sock \
   --volume docuum:/root \
-  stephanmisc/docuum
+  stephanmisc/docuum --threshold '15 GB'
 ```
 
 ### Easy installation
