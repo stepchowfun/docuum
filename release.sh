@@ -7,10 +7,15 @@ set -euo pipefail
 
 # The release process involves three pull requests:
 # 1. Bump the version in `Cargo.toml`, run `cargo build` to update `Cargo.lock`, and update
-#    `CHANGELOG.md` with information about the new version. Once this PR is merged, run
-#    `cargo publish`.
-# 2. Run this script and upload the files in the `release` directory to GitHub as release artifacts.
-# 3. Update the version in `install.sh` to point to the new release.
+#    `CHANGELOG.md` with information about the new version. Ship those changes as a pull request.
+# 2. Run `cargo publish`.
+# 3. Run this script and upload the files in the `release` directory to GitHub as release artifacts.
+# 4. Build and upload the Docker image:
+#      cd release
+#      docker build --tag stephanmisc/docuum:0.8.0 .
+#      docker push stephanmisc/docuum:0.8.0
+# 5. Update the version in `install.sh` to point to the new release. Ship that change as another
+#    pull request.
 
 # We wrap everything in parentheses to ensure that any working directory changes with `cd` are local
 # to this script and don't affect the calling user's shell.

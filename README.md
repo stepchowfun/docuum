@@ -78,6 +78,32 @@ OPTIONS:
 
 ## Installation
 
+### Running Docuum in a Docker container
+
+If you prefer not to install Docuum on your system, you can run it in a container. To run it in the foreground:
+
+```sh
+docker run \
+  --init \
+  --rm \
+  --tty \
+  --volume /var/run/docker.sock:/var/run/docker.sock \
+  --volume docuum:/root \
+  stephanmisc/docuum
+```
+
+To run it in the background:
+
+```sh
+docker run \
+  --detach \
+  --init \
+  --rm \
+  --volume /var/run/docker.sock:/var/run/docker.sock \
+  --volume docuum:/root \
+  stephanmisc/docuum
+```
+
 ### Easy installation
 
 If you are running macOS or a GNU-based Linux on an x86-64 CPU, you can install Docuum with this command:
