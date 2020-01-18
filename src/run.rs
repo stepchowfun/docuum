@@ -10,7 +10,7 @@ use std::{
     collections::HashSet,
     io::{self, BufRead, BufReader},
     process::{Command, Stdio},
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 // A Docker event (a line of output from `docker events --format '{{json .}}'`)
@@ -251,6 +251,13 @@ fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
         }
     });
 
+    // In preparation fro the next step, pre-compute the timestamp
+    // corresponding to the current time.
+    let now_timestamp = match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(duration) => Ok(duration),
+        Err(error) => Err(io::Error::new(io::ErrorKind::Other, error)),
+    }?;
+
     // Add any missing images to `state`.
     for image_id in &image_ids {
         state.images.entry(image_id.clone()).or_insert_with(|| {
@@ -258,7 +265,8 @@ fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
                 "Adding missing record for image {}\u{2026}",
                 &image_id.code_str(),
             );
-            Duration::new(0, 0)
+
+            now_timestamp
         });
     }
 
