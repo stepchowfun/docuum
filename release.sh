@@ -11,9 +11,8 @@ set -euo pipefail
 # 2. Run `cargo publish`.
 # 3. Run this script and upload the files in the `release` directory to GitHub as release artifacts.
 # 4. Build and upload the Docker image:
-#      cd release
-#      docker build --tag stephanmisc/docuum:0.8.0 .
-#      docker push stephanmisc/docuum:0.8.0
+#      docker build --tag stephanmisc/docuum --tag stephanmisc/docuum:X.Y.Z .
+#      docker push stephanmisc/docuum
 # 5. Update the version in `install.sh` to point to the new release. Ship that change as another
 #    pull request.
 
