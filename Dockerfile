@@ -27,7 +27,7 @@ RUN \
   rm -rf /var/lib/apt/lists/*
 
 # Install Docuum.
-COPY docuum-x86_64-unknown-linux-gnu /usr/local/bin/docuum
+COPY release/docuum-x86_64-unknown-linux-gnu /usr/local/bin/docuum
 
 # Set the entrypoint to Docuum. Note that Docuum is not intended to be run as
 # an init process, so we run it indirectly via `sh`.
