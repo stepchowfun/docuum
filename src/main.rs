@@ -5,6 +5,7 @@ mod state;
 use crate::{format::CodeStr, run::run};
 use atty::Stream;
 use byte_unit::Byte;
+use chrono::Local;
 use clap::{App, AppSettings, Arg};
 use env_logger::{fmt::Color, Builder};
 use log::{Level, LevelFilter};
@@ -66,7 +67,11 @@ fn set_up_logging() {
             writeln!(
                 buf,
                 "{} {}",
-                style.value(format!("[{} {}]", buf.timestamp(), record.level())),
+                style.value(format!(
+                    "[{} {}]",
+                    Local::now().format("%Y-%m-%d %H:%M:%S %:z").to_string(),
+                    record.level()
+                )),
                 record.args().to_string()
             )
         })
