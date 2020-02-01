@@ -127,14 +127,23 @@ pub fn image_ids_in_use() -> io::Result<HashSet<String>> {
     // Interpret the output bytes as UTF-8 and collect the lines.
     String::from_utf8(output.stdout)
         .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
-        .and_then(|output| {
+        .map(|output| {
             output
                 .lines()
                 .filter_map(|line| {
                     if line.is_empty() {
                         None
                     } else {
-                        Some(image_id(line.trim()))
+                        match image_id(line.trim()) {
+                            Ok(the_image_id) => Some(the_image_id),
+                            Err(error) => {
+                                // This failure may happen if a container was created from an
+                                // image that no longer exists. This is non-fatal, so we just log
+                                // the error and continue.
+                                error!("{}", error);
+                                None
+                            }
+                        }
                     }
                 })
                 .collect()
