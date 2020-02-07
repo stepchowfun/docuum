@@ -8,6 +8,8 @@ Docker's built-in `docker image prune --all --filter until=…` command serves a
 
 Docuum is ideal for use cases such as continuous integration workers, development environments, or any other situation in which Docker images accumulate on disk over time. Docuum works well with tools like [Toast](https://github.com/stepchowfun/toast) and [Docker Compose](https://docs.docker.com/compose/).
 
+Docuum is used by Airbnb on its fleet of 1.5k+ CI workers.
+
 ## How it works
 
 [Docker doesn't record when an image was last used.](https://github.com/moby/moby/issues/4237) To work around this, Docuum listens for notifications via `docker events` to learn when images are used. It maintains a small piece of state in a local data directory (see [this](https://docs.rs/dirs/2.0.2/dirs/fn.data_local_dir.html) for details about where this directory is on various platforms). That persisted state allows you to freely restart Docuum (or the whole machine) without losing the image usage timestamp data.
