@@ -89,6 +89,7 @@ docker run \
   --init \
   --rm \
   --tty \
+  --name docuum \
   --volume /var/run/docker.sock:/var/run/docker.sock \
   --volume docuum:/root \
   stephanmisc/docuum --threshold '15 GB'
@@ -101,6 +102,7 @@ docker run \
   --detach \
   --init \
   --rm \
+  --name docuum \
   --volume /var/run/docker.sock:/var/run/docker.sock \
   --volume docuum:/root \
   stephanmisc/docuum --threshold '15 GB'
