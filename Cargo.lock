@@ -172,7 +172,7 @@ dependencies = [
 
 [[package]]
 name = "docuum"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "atty 0.2.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "byte-unit 3.0.3 (registry+https://github.com/rust-lang/crates.io-index)",

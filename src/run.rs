@@ -395,14 +395,12 @@ pub fn run(settings: &Settings, state: &mut State) -> io::Result<()> {
                     continue;
                 }
             } else if event.r#type == "image"
-                && (event.action == "delete"
-                    || event.action == "import"
+                && (event.action == "import"
                     || event.action == "load"
                     || event.action == "pull"
                     || event.action == "push"
                     || event.action == "save"
-                    || event.action == "tag"
-                    || event.action == "untag")
+                    || event.action == "tag")
             {
                 event.id
             } else {
