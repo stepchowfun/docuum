@@ -18,7 +18,7 @@ pub struct State {
 
 // Where the program state is persisted on disk
 fn path() -> Option<PathBuf> {
-    // [tag:state-path-has-parent]
+    // [tag:state_path_has_parent]
     dirs::data_local_dir().map(|path| path.join("docuum/state.yml"))
 }
 
@@ -63,7 +63,7 @@ pub fn save(state: &State) -> io::Result<()> {
             path.to_string_lossy().code_str(),
         );
 
-        // The `unwrap` is safe due to [ref:state-path-has-parent].
+        // The `unwrap` is safe due to [ref:state_path_has_parent].
         let parent = path.parent().unwrap().to_owned();
 
         // The `unwrap` is safe because serialization should never fail.

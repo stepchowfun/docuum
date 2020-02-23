@@ -331,7 +331,7 @@ fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
         );
     }
 
-    // Persist the state [tag:vacuum-persists-state].
+    // Persist the state [tag:vacuum_persists_state].
     state::save(&state)?;
 
     // Inform the user that we're done for now.
@@ -412,7 +412,7 @@ pub fn run(settings: &Settings, state: &mut State) -> io::Result<()> {
         // Update the timestamp for this image.
         update_timestamp(state, &image_id, true)?;
 
-        // Run the main vacuum logic. This will also persist the state [ref:vacuum-persists-state].
+        // Run the main vacuum logic. This will also persist the state [ref:vacuum_persists_state].
         vacuum(state, &settings.threshold)?;
     }
 
