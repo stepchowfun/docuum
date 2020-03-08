@@ -14,4 +14,4 @@ jobs:
       with:
         tasks: build test lint run
         repo: stephanmisc/toast
-        write_remote_cache: github.event_name == 'push'
+        write_remote_cache: ${{ github.event_name == 'push' }}
