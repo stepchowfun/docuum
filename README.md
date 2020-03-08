@@ -1,5 +1,7 @@
 # *Docuum:* LRU eviction of Docker images
 
+[![Build status](https://github.com/stepchowfun/docuum/workflows/Continuous%20integration/badge.svg?branch=master)](https://github.com/stepchowfun/docuum/actions?query=branch%3Amaster)
+
 *Docuum* performs least recently used (LRU) eviction of Docker images to keep the disk usage below a given threshold.
 
 Docker's built-in `docker image prune --all --filter until=…` command serves a similar purpose. However, the built-in solution isn't ideal since it uses the image creation time, rather than the last usage time, to determine which images to remove. That means it can delete frequently used images, and these may take a long time to build.
