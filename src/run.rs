@@ -353,6 +353,7 @@ pub fn run(settings: &Settings, state: &mut State) -> io::Result<()> {
             .spawn()?,
         |mut child| {
             let _ = child.kill();
+            let _ = child.wait();
         },
     );
 
