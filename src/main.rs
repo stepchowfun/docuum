@@ -14,9 +14,9 @@ use std::{
     io::{self, Write},
     process::exit,
     str::FromStr,
-    thread::sleep,
     time::Duration,
 };
+use tokio::time::delay_for;
 
 #[macro_use]
 extern crate log;
@@ -119,8 +119,9 @@ fn settings() -> io::Result<Settings> {
     Ok(Settings { threshold })
 }
 
+#[tokio::main]
 // Let the fun begin!
-fn main() {
+async fn main() {
     // Determine whether to print colored output.
     colored::control::set_override(atty::is(Stream::Stderr));
 
@@ -150,10 +151,10 @@ fn main() {
 
     // Stream Docker events and vacuum when necessary. Restart if an error occurs.
     loop {
-        if let Err(e) = run(&settings, &mut state) {
+        if let Err(e) = run(&settings, &mut state).await {
             error!("{}", e);
             info!("Restarting\u{2026}");
-            sleep(Duration::from_secs(1));
+            delay_for(Duration::from_secs(1)).await;
         }
     }
 }
