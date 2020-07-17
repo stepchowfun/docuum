@@ -4,13 +4,22 @@ use crate::{
     Settings,
 };
 use byte_unit::Byte;
+use chrono::{
+    DateTime,
+    Local
+};
+
+use log::warn;
+
 use scopeguard::guard;
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashMap,
     collections::HashSet,
+    convert::TryInto,
     io::{self, BufRead, BufReader},
     process::{Command, Stdio},
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 // A Docker event (a line of output from `docker events --format '{{json .}}'`)
@@ -73,11 +82,18 @@ pub fn image_id(image: &str) -> io::Result<String> {
         .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
 }
 
-// Ask Docker for the IDs of all the images.
-pub fn image_ids() -> io::Result<HashSet<String>> {
+// Ask Docker for the IDs and CreatedAt dates of all the images.
+pub fn image_ids() -> io::Result<HashMap<String, Duration>> {
     // Query Docker for the image IDs.
     let output = Command::new("docker")
-        .args(&["image", "ls", "--all", "--no-trunc", "--format", "{{.ID}}"])
+        .args(&[
+            "image",
+            "ls",
+            "--all",
+            "--no-trunc",
+            "--format",
+            "{{.ID}}\\t{{.CreatedAt}}",
+        ])
         .stderr(Stdio::inherit())
         .output()?;
 
@@ -95,10 +111,38 @@ pub fn image_ids() -> io::Result<HashSet<String>> {
             output
                 .lines()
                 .map(|line| line.trim().to_owned())
-                .filter(|line| !line.is_empty())
+                .filter_map(|line| {
+                    if line.is_empty() {
+                        let tab_index = line.find('\t').unwrap();
+                        let (image_id, date_str) = line.split_at(tab_index);
+                        Some((image_id.to_owned(), parse_docker_date(date_str.trim())))
+                    } else {
+                        None
+                    }
+                })
                 .collect()
         })
         .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
+}
+
+// Extract a Duration from Docker's non-standard date format used in `docker image ls`
+// Example input: "2017-12-20 16:30:49 -0500 EST"
+fn parse_docker_date(date_str: &str) -> Duration {
+    let date_fmt = "%Y-%m-%d %H:%M:%S %z";
+    // Chrono can't read the "EST", so remove it before parsing
+    let timezone_index = 25;
+
+    let timestamp = if let Ok(dt) = DateTime::parse_from_str(&date_str[..timezone_index], date_fmt)
+    {
+        dt.timestamp()
+    } else {
+        warn!(
+            "Unable to parse CreatedAt: {}. Defaulting to current time",
+            date_str
+        );
+        Local::now().timestamp()
+    };
+    Duration::from_secs(timestamp.try_into().unwrap())
 }
 
 // Ask Docker for the IDs of the images currently in use by containers.
@@ -249,7 +293,7 @@ fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
 
     // Remove non-existent images from `state`.
     state.images.retain(|image_id, _| {
-        if image_ids.contains(image_id) {
+        if image_ids.contains_key(image_id) {
             true
         } else {
             debug!(
@@ -260,22 +304,15 @@ fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
         }
     });
 
-    // In preparation fro the next step, pre-compute the timestamp
-    // corresponding to the current time.
-    let now_timestamp = match SystemTime::now().duration_since(UNIX_EPOCH) {
-        Ok(duration) => Ok(duration),
-        Err(error) => Err(io::Error::new(io::ErrorKind::Other, error)),
-    }?;
-
     // Add any missing images to `state`.
-    for image_id in &image_ids {
+    for (image_id, creation_time) in &image_ids {
         state.images.entry(image_id.clone()).or_insert_with(|| {
             debug!(
                 "Adding missing record for image {}\u{2026}",
                 &image_id.code_str(),
             );
 
-            now_timestamp
+            *creation_time
         });
     }
 
@@ -290,9 +327,9 @@ fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
         // The two `unwrap`s here are safe by the construction of `image_ids_vec`.
         state
             .images
-            .get(x)
+            .get(x.0)
             .unwrap()
-            .cmp(state.images.get(y).unwrap())
+            .cmp(state.images.get(y.0).unwrap())
     });
 
     // Check if we're over threshold.
@@ -306,7 +343,7 @@ fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
         );
 
         // Start deleting images, starting with the least recently used.
-        for image_id in image_ids_vec {
+        for (image_id, _) in image_ids_vec {
             // Break if we're within the threshold.
             let new_space = space_usage()?;
             if new_space <= *threshold {
