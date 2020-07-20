@@ -12,6 +12,7 @@ use bollard::{
 use byte_unit::Byte;
 use std::{
     collections::HashSet,
+    convert::TryInto,
     io,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -38,9 +39,9 @@ pub async fn image_id(docker: &Docker, image: &str) -> io::Result<String> {
 pub async fn image_ids(docker: &Docker) -> io::Result<HashSet<String>> {
     // Query Docker for the image IDs.
     let output = docker
-        .list_images(Some(ListImagesOptions::<String> {
+        .list_images(Some(ListImagesOptions {
             all: true,
-            ..Default::default()
+            ..ListImagesOptions::<String>::default()
         }))
         .await
         .map_err(|error| {
@@ -57,9 +58,9 @@ pub async fn image_ids(docker: &Docker) -> io::Result<HashSet<String>> {
 pub async fn image_ids_in_use(docker: &Docker) -> io::Result<HashSet<String>> {
     // Query Docker for the image IDs.
     let output = docker
-        .list_containers(Some(ListContainersOptions::<String> {
+        .list_containers(Some(ListContainersOptions {
             all: true,
-            ..Default::default()
+            ..ListContainersOptions::<String>::default()
         }))
         .await
         .map_err(|error| {
@@ -94,8 +95,8 @@ async fn space_usage(docker: &Docker) -> io::Result<Byte> {
     Ok(Byte::from_bytes(
         output
             .layers_size
-            .map(|size| size as u64)
-            .unwrap_or(0)
+            // assumes total size is not negative
+            .map_or(0_u64, |size| size.try_into().unwrap())
             .into(),
     ))
 }
@@ -280,6 +281,8 @@ pub async fn run(settings: &Settings, state: &mut State) -> io::Result<()> {
 
         debug!("Incoming event: {:?}", event);
 
+        // Bollard uses _type instead of r#type or type_: fussybeaver/bollard#87
+        #[allow(clippy::used_underscore_binding)]
         let (r#type, action) = match (event._type, event.action) {
             (Some(r#type), Some(action)) => (r#type, action),
             _ => continue,
