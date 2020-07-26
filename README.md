@@ -149,5 +149,5 @@ You can run that command with `--force` to update an existing installation.
 
 ## Requirements
 
-- Docuum requires [Docker Engine](https://www.docker.com/products/container-runtime) 17.03.0 or later.
-  - If you are using Docker Engine 18.09.0 or later with [BuildKit mode](https://docs.docker.com/develop/develop-images/build_enhancements/) enabled, Docker distinguishes between layers for intermediate build steps ("build cache") versus actual images. Docuum will only clean up images. BuildKit's built-in garbage collection feature can be used for the build cache. If you are not using BuildKit mode, there is no distinction between images and build cache layers, and Docuum will happily clean up both.
+- Docuum requires Docker Engine 19.03 or later. This corresponds to Docker API 1.40 or later.
+  - If you are using Docker Engine with [BuildKit mode](https://docs.docker.com/develop/develop-images/build_enhancements/) enabled, Docker distinguishes between layers for intermediate build steps ("build cache") versus actual images. Docuum will only clean up images. BuildKit's built-in garbage collection feature can be used for the build cache. If you are not using BuildKit mode, there is no distinction between images and build cache layers, and Docuum will happily clean up both.
