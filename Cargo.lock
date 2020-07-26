@@ -226,7 +226,7 @@ dependencies = [
 
 [[package]]
 name = "docuum"
-version = "0.9.5"
+version = "0.10.0"
 dependencies = [
  "atty 0.2.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "bollard 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
