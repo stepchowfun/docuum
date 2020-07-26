@@ -75,7 +75,7 @@ pub async fn image_ids_in_use(docker: &Docker) -> io::Result<HashSet<String>> {
 
     Ok(output
         .into_iter()
-        .filter_map(|container| container.image)
+        .filter_map(|container| container.image_id)
         .collect())
 }
 
@@ -95,7 +95,7 @@ async fn space_usage(docker: &Docker) -> io::Result<Byte> {
     Ok(Byte::from_bytes(
         output
             .layers_size
-            // assumes total size is not negative
+            // Assumes total size is non-negative.
             .map_or(0_u64, |size| size.try_into().unwrap())
             .into(),
     ))
