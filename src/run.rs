@@ -111,11 +111,7 @@ pub fn image_ids() -> io::Result<HashMap<String, Duration>> {
                     io::Error::new(io::ErrorKind::Other, "Failed to split image ID and date")
                 })?;
                 let (image_id, date_str) = line.split_at(tab_index);
-                // Chrono can't read the "EST", so remove it before parsing
-                let clean_date_str = date_str.trim().rsplitn(2, ' ').last().ok_or_else(|| {
-                    io::Error::new(io::ErrorKind::Other, "Failed to remove timezone string")
-                })?;
-                match parse_docker_date(&clean_date_str) {
+                match parse_docker_date(&date_str) {
                     Ok(duration) => images.insert(image_id.trim().to_owned(), duration),
                     Err(e) => return Err(e),
                 };
@@ -127,8 +123,13 @@ pub fn image_ids() -> io::Result<HashMap<String, Duration>> {
 // Extract the Duration from Docker's non-standard date format used in `docker image ls`
 // Example input: "2017-12-20 16:30:49 -0500 EST"
 fn parse_docker_date(date_str: &str) -> io::Result<Duration> {
+    // Chrono can't read the "EST", so remove it before parsing
+    let clean_date_str =
+        date_str.trim().rsplitn(2, ' ').last().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::Other, "Failed to remove timezone string")
+        })?;
     // Parse the date and convert into a time::Duration since the epoch
-    let old_duration = match DateTime::parse_from_str(&date_str, "%Y-%m-%d %H:%M:%S %z") {
+    let old_duration = match DateTime::parse_from_str(&clean_date_str, "%Y-%m-%d %H:%M:%S %z") {
         Ok(dt) => dt.signed_duration_since::<chrono::offset::Utc>(DateTime::from(UNIX_EPOCH)),
         Err(e) => return Err(io::Error::new(io::ErrorKind::Other, e)),
     };
