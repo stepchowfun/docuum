@@ -8,8 +8,7 @@ use chrono::DateTime;
 use scopeguard::guard;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     io::{self, BufRead, BufReader},
     process::{Command, Stdio},
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -108,13 +107,10 @@ pub fn image_ids() -> io::Result<HashMap<String, Duration>> {
                     continue;
                 }
                 let tab_index = line.find('\t').ok_or_else(|| {
-                    io::Error::new(io::ErrorKind::Other, "Failed to split image ID and date")
+                    io::Error::new(io::ErrorKind::Other, "Failed to split image ID and date.")
                 })?;
                 let (image_id, date_str) = line.split_at(tab_index);
-                match parse_docker_date(&date_str) {
-                    Ok(duration) => images.insert(image_id.trim().to_owned(), duration),
-                    Err(e) => return Err(e),
-                };
+                images.insert(image_id.trim().to_owned(), parse_docker_date(&date_str)?);
             }
             Ok(images)
         })
@@ -126,7 +122,7 @@ fn parse_docker_date(date_str: &str) -> io::Result<Duration> {
     // Chrono can't read the "EST", so remove it before parsing
     let clean_date_str =
         date_str.trim().rsplitn(2, ' ').last().ok_or_else(|| {
-            io::Error::new(io::ErrorKind::Other, "Failed to remove timezone string")
+            io::Error::new(io::ErrorKind::Other, "Failed to remove timezone string.")
         })?;
     // Parse the date and convert into a time::Duration since the epoch
     let old_duration = match DateTime::parse_from_str(&clean_date_str, "%Y-%m-%d %H:%M:%S %z") {
