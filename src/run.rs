@@ -75,7 +75,7 @@ pub fn image_id(image: &str) -> io::Result<String> {
 }
 
 // Ask Docker for the IDs and CreatedAt dates of all the images.
-pub fn image_ids() -> io::Result<HashMap<String, Duration>> {
+pub fn image_ids_and_creation_timestamps() -> io::Result<HashMap<String, Duration>> {
     // Query Docker for the image IDs.
     let output = Command::new("docker")
         .args(&[
@@ -280,11 +280,11 @@ fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
     info!("Waking up\u{2026}");
 
     // Determine all the image IDs.
-    let image_ids = image_ids()?;
+    let image_ids_and_creation_timestamps = image_ids_and_creation_timestamps()?;
 
     // Remove non-existent images from `state`.
     state.images.retain(|image_id, _| {
-        if image_ids.contains_key(image_id) {
+        if image_ids_and_creation_timestamps.contains_key(image_id) {
             true
         } else {
             debug!(
@@ -296,7 +296,7 @@ fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
     });
 
     // Add any missing images to `state`.
-    for (image_id, creation_time) in &image_ids {
+    for (image_id, creation_time) in &image_ids_and_creation_timestamps {
         state.images.entry(image_id.clone()).or_insert_with(|| {
             debug!(
                 "Adding missing record for image {}\u{2026}",
@@ -313,7 +313,7 @@ fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
     }
 
     // Sort the image IDs from least recently used to most recently used.
-    let mut image_ids_vec = image_ids.iter().collect::<Vec<_>>();
+    let mut image_ids_vec = image_ids_and_creation_timestamps.iter().collect::<Vec<_>>();
     image_ids_vec.sort_by(|&x, &y| {
         // The two `unwrap`s here are safe by the construction of `image_ids_vec`.
         state
