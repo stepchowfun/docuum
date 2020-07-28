@@ -74,7 +74,7 @@ pub fn image_id(image: &str) -> io::Result<String> {
         .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
 }
 
-// Ask Docker for the IDs and CreatedAt dates of all the images.
+// Ask Docker for the IDs and creation timestamps of all the images.
 pub fn image_ids_and_creation_timestamps() -> io::Result<HashMap<String, Duration>> {
     // Query Docker for the image IDs.
     let output = Command::new("docker")
@@ -96,43 +96,50 @@ pub fn image_ids_and_creation_timestamps() -> io::Result<HashMap<String, Duratio
             "Unable to determine IDs of all images.",
         ));
     }
-    let mut images = HashMap::new();
+
     // Interpret the output bytes as UTF-8 and collect the lines.
+    let mut images = HashMap::new();
     String::from_utf8(output.stdout)
         .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
         .and_then(|output| {
-            let lines = output.trim().lines();
+            let lines = output.lines();
             for line in lines {
-                if line.is_empty() {
+                let trimmed_line = line.trim();
+                if trimmed_line.is_empty() {
                     continue;
                 }
-                let tab_index = line.find('\t').ok_or_else(|| {
+                let tab_index = trimmed_line.find('\t').ok_or_else(|| {
                     io::Error::new(io::ErrorKind::Other, "Failed to split image ID and date.")
                 })?;
-                let (image_id, date_str) = line.split_at(tab_index);
+                let (image_id, date_str) = trimmed_line.split_at(tab_index);
                 images.insert(image_id.trim().to_owned(), parse_docker_date(&date_str)?);
             }
             Ok(images)
         })
 }
 
-// Extract the Duration from Docker's non-standard date format used in `docker image ls`
-// Example input: "2017-12-20 16:30:49 -0500 EST"
-fn parse_docker_date(date_str: &str) -> io::Result<Duration> {
-    // Chrono can't read the "EST", so remove it before parsing
-    let clean_date_str =
-        date_str.trim().rsplitn(2, ' ').last().ok_or_else(|| {
+// Parse the non-standard timestamp format Docker uses for `docker image ls`.
+// Example input: "2017-12-20 16:30:49 -0500 EST".
+fn parse_docker_date(timestamp: &str) -> io::Result<Duration> {
+    // Chrono can't read the "EST", so remove it before parsing.
+    let timestamp_without_timezone_triad =
+        timestamp.trim().rsplitn(2, ' ').last().ok_or_else(|| {
             io::Error::new(io::ErrorKind::Other, "Failed to remove timezone string.")
         })?;
-    // Parse the date and convert into a time::Duration since the epoch
-    let old_duration = match DateTime::parse_from_str(&clean_date_str, "%Y-%m-%d %H:%M:%S %z") {
-        Ok(dt) => dt.signed_duration_since::<chrono::offset::Utc>(DateTime::from(UNIX_EPOCH)),
-        Err(e) => return Err(io::Error::new(io::ErrorKind::Other, e)),
-    };
-    // Convert back into std::time::Duration
-    match old_duration.to_std() {
+
+    // Parse the date and convert it into a duration since the UNIX epoch.
+    let duration =
+        match DateTime::parse_from_str(&timestamp_without_timezone_triad, "%Y-%m-%d %H:%M:%S %z") {
+            Ok(datetime) => {
+                datetime.signed_duration_since::<chrono::offset::Utc>(DateTime::from(UNIX_EPOCH))
+            }
+            Err(error) => return Err(io::Error::new(io::ErrorKind::Other, error)),
+        };
+
+    // Convert the duration into a `std::time::Duration`.
+    match duration.to_std() {
         Ok(duration) => Ok(duration),
-        Err(e) => Err(io::Error::new(io::ErrorKind::Other, e)),
+        Err(error) => Err(io::Error::new(io::ErrorKind::Other, error)),
     }
 }
 
