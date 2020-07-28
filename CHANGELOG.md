@@ -5,10 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1] - 2020-07-26
+
+### Changed
+- Reverted the change from v0.10.0 due to a bug in a dependency (see https://github.com/stepchowfun/docuum/issues/78).
+
+## [0.10.0] - 2020-07-26
+
+### Changed
+- Docuum now uses the Docker API to communicate with the Docker daemon directly and no longer depends on the Docker CLI.
+
 ## [0.9.5] - 2020-07-14
 
 ### Fixed
-- Fix a bug which caused zombie `docker events ...` processes to accumulate over time.
+- Fixed a bug which caused zombie `docker events ...` processes to accumulate over time.
 
 ## [0.9.4] - 2020-02-12
 
