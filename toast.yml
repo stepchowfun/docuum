@@ -94,7 +94,7 @@ tasks:
       . $HOME/.cargo/env
       cargo clippy --all-targets --all-features -- \
         --deny warnings --deny clippy::all --deny clippy::pedantic
-      cargo fmt --all -- --check
+      cargo fmt --all -- --check || echo 'ERROR: Please correct the formatting errors above.' 1>&2
       tagref
       shellcheck install.sh
       shellcheck release.sh
