@@ -3,255 +3,137 @@ use crate::{
     state::{self, State},
     Settings,
 };
+use bollard::{
+    container::ListContainersOptions,
+    image::{ListImagesOptions, RemoveImageOptions},
+    system::EventsOptions,
+    Docker,
+};
 use byte_unit::Byte;
-use chrono::DateTime;
-use scopeguard::guard;
-use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
-    io::{self, BufRead, BufReader},
-    process::{Command, Stdio},
+    convert::TryInto,
+    io,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-
-// A Docker event (a line of output from `docker events --format '{{json .}}'`)
-#[derive(Deserialize, Serialize, Debug)]
-struct Event {
-    #[serde(rename = "Type")]
-    pub r#type: String,
-
-    #[serde(rename = "Action")]
-    pub action: String,
-
-    #[serde(rename = "Actor")]
-    pub actor: EventActor,
-
-    pub id: String,
-}
-
-// A Docker event actor
-#[derive(Deserialize, Serialize, Debug)]
-struct EventActor {
-    #[serde(rename = "Attributes")]
-    pub attributes: EventActorAttributes,
-}
-
-// Docker event actor attributes
-#[derive(Deserialize, Serialize, Debug)]
-struct EventActorAttributes {
-    pub image: Option<String>,
-}
-
-// A line of output from `docker system df --format '{{json .}}'`
-#[derive(Deserialize, Serialize, Debug)]
-struct SpaceRecord {
-    #[serde(rename = "Type")]
-    pub r#type: String,
-
-    #[serde(rename = "Size")]
-    pub size: String,
-}
+use tokio::stream::StreamExt;
 
 // Ask Docker for the ID of an image.
-pub fn image_id(image: &str) -> io::Result<String> {
+pub async fn image_id(docker: &Docker, image: &str) -> io::Result<String> {
     // Query Docker for the image ID.
-    let output = Command::new("docker")
-        .args(&["image", "inspect", "--format", "{{.ID}}", image])
-        .stderr(Stdio::inherit())
-        .output()?;
-
-    // Ensure the command succeeded.
-    if !output.status.success() {
-        return Err(io::Error::new(
+    let output = docker.inspect_image(image).await.map_err(|error| {
+        io::Error::new(
             io::ErrorKind::Other,
-            format!("Unable to determine ID of image {}.", image.code_str()),
-        ));
-    }
+            format!(
+                "Unable to determine ID of image {}: {:?}.",
+                image.code_str(),
+                error
+            ),
+        )
+    })?;
 
-    // Interpret the output bytes as UTF-8 and trim any leading/trailing whitespace.
-    String::from_utf8(output.stdout)
-        .map(|output| output.trim().to_owned())
-        .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
+    Ok(output.id)
 }
 
-// Ask Docker for the IDs and creation timestamps of all the images.
-pub fn image_ids_and_creation_timestamps() -> io::Result<HashMap<String, Duration>> {
+// Ask Docker for the IDs of all the images.
+pub async fn image_ids_and_creation_timestamps(
+    docker: &Docker,
+) -> io::Result<HashMap<String, Duration>> {
     // Query Docker for the image IDs.
-    let output = Command::new("docker")
-        .args(&[
-            "image",
-            "ls",
-            "--all",
-            "--no-trunc",
-            "--format",
-            "{{.ID}}\\t{{.CreatedAt}}",
-        ])
-        .stderr(Stdio::inherit())
-        .output()?;
-
-    // Ensure the command succeeded.
-    if !output.status.success() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Unable to determine IDs of all images.",
-        ));
-    }
-
-    // Interpret the output bytes as UTF-8 and collect the lines.
-    let mut images = HashMap::new();
-    String::from_utf8(output.stdout)
-        .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
-        .and_then(|output| {
-            let lines = output.lines();
-            for line in lines {
-                let trimmed_line = line.trim();
-                if trimmed_line.is_empty() {
-                    continue;
-                }
-                let tab_index = trimmed_line.find('\t').ok_or_else(|| {
-                    io::Error::new(io::ErrorKind::Other, "Failed to split image ID and date.")
-                })?;
-                let (image_id, date_str) = trimmed_line.split_at(tab_index);
-                images.insert(image_id.trim().to_owned(), parse_docker_date(&date_str)?);
-            }
-            Ok(images)
-        })
-}
-
-// Parse the non-standard timestamp format Docker uses for `docker image ls`.
-// Example input: "2017-12-20 16:30:49 -0500 EST".
-fn parse_docker_date(timestamp: &str) -> io::Result<Duration> {
-    // Chrono can't read the "EST", so remove it before parsing.
-    let timestamp_without_timezone_triad =
-        timestamp.trim().rsplitn(2, ' ').last().ok_or_else(|| {
-            io::Error::new(io::ErrorKind::Other, "Failed to remove timezone string.")
+    let output = docker
+        .list_images(Some(ListImagesOptions {
+            all: true,
+            ..ListImagesOptions::<String>::default()
+        }))
+        .await
+        .map_err(|error| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("Unable to determine IDs of all images: {:?}.", error),
+            )
         })?;
 
-    // Parse the date and convert it into a duration since the UNIX epoch.
-    let duration =
-        match DateTime::parse_from_str(&timestamp_without_timezone_triad, "%Y-%m-%d %H:%M:%S %z") {
-            Ok(datetime) => {
-                datetime.signed_duration_since::<chrono::offset::Utc>(DateTime::from(UNIX_EPOCH))
-            }
-            Err(error) => return Err(io::Error::new(io::ErrorKind::Other, error)),
-        };
+    let mut images = HashMap::new();
 
-    // Convert the duration into a `std::time::Duration`.
-    match duration.to_std() {
-        Ok(duration) => Ok(duration),
-        Err(error) => Err(io::Error::new(io::ErrorKind::Other, error)),
+    for image in output {
+        match image.created.try_into() {
+            Ok(unsigned) => images.insert(image.id, Duration::from_secs(unsigned)),
+            Err(e) => return Err(io::Error::new(io::ErrorKind::Other, e)),
+        };
     }
+    Ok(images)
 }
 
 // Ask Docker for the IDs of the images currently in use by containers.
-pub fn image_ids_in_use() -> io::Result<HashSet<String>> {
+pub async fn image_ids_in_use(docker: &Docker) -> io::Result<HashSet<String>> {
     // Query Docker for the image IDs.
-    let output = Command::new("docker")
-        .args(&[
-            "container",
-            "ls",
-            "--all",
-            "--no-trunc",
-            "--format",
-            "{{.Image}}",
-        ])
-        .stderr(Stdio::inherit())
-        .output()?;
+    let output = docker
+        .list_containers(Some(ListContainersOptions {
+            all: true,
+            ..ListContainersOptions::<String>::default()
+        }))
+        .await
+        .map_err(|error| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!(
+                    "Unable to determine IDs of images currently in use by containers: {:?}.",
+                    error
+                ),
+            )
+        })?;
 
-    // Ensure the command succeeded.
-    if !output.status.success() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Unable to determine IDs of images currently in use by containers.",
-        ));
-    }
-
-    // Interpret the output bytes as UTF-8 and collect the lines.
-    String::from_utf8(output.stdout)
-        .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
-        .map(|output| {
-            output
-                .lines()
-                .filter_map(|line| {
-                    if line.is_empty() {
-                        None
-                    } else {
-                        match image_id(line.trim()) {
-                            Ok(the_image_id) => Some(the_image_id),
-                            Err(error) => {
-                                // This failure may happen if a container was created from an
-                                // image that no longer exists. This is non-fatal, so we just log
-                                // the error and continue.
-                                error!("{}", error);
-                                None
-                            }
-                        }
-                    }
-                })
-                .collect()
-        })
+    Ok(output
+        .into_iter()
+        .filter_map(|container| container.image_id)
+        .collect())
 }
 
 // Get the total space used by Docker images.
-fn space_usage() -> io::Result<Byte> {
+async fn space_usage(docker: &Docker) -> io::Result<Byte> {
     // Query Docker for the space usage.
-    let output = Command::new("docker")
-        .args(&["system", "df", "--format", "{{json .}}"])
-        .stderr(Stdio::inherit())
-        .output()?;
-
-    // Ensure the command succeeded.
-    if !output.status.success() {
-        return Err(io::Error::new(
+    let output = docker.df().await.map_err(|error| {
+        io::Error::new(
             io::ErrorKind::Other,
-            "Unable to determine the disk space used by Docker images.",
-        ));
-    }
+            format!(
+                "Unable to determine the disk space used by Docker images: {:?}.",
+                error
+            ),
+        )
+    })?;
 
-    // Find the relevant line of output.
-    String::from_utf8(output.stdout)
-        .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
-        .and_then(|output| {
-            for line in output.lines() {
-                // Parse the line as a space record.
-                if let Ok(space_record) = serde_json::from_str::<SpaceRecord>(&line) {
-                    // Return early if we found the record we're looking for.
-                    if space_record.r#type == "Images" {
-                        return Byte::from_str(&space_record.size).map_err(|_| {
-                            io::Error::new(
-                                io::ErrorKind::Other,
-                                format!("Invalid threshold {}.", space_record.size.code_str()),
-                            )
-                        });
-                    }
-                }
-            }
-
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!(
-                    "Unable to parse output of {}: {}",
-                    "docker system df".code_str(),
-                    output.code_str(),
-                ),
-            ))
-        })
+    Ok(Byte::from_bytes(
+        output
+            .layers_size
+            // Assumes total size is non-negative.
+            .map_or(0_u64, |size| size.try_into().unwrap())
+            .into(),
+    ))
 }
 
 // Delete a Docker image.
-fn delete_image(image_id: &str) -> io::Result<()> {
+async fn delete_image(docker: &Docker, image_id: &str) -> io::Result<()> {
     info!("Deleting image {}\u{2026}", image_id.code_str());
 
     // Tell Docker to delete the image.
-    let mut child = Command::new("docker")
-        .args(&["image", "rm", "--force", "--no-prune", image_id])
-        .spawn()?;
-
-    // Ensure the command succeeded.
-    if !child.wait()?.success() {
+    if let Err(error) = docker
+        .remove_image(
+            image_id,
+            Some(RemoveImageOptions {
+                force: true,
+                noprune: true,
+            }),
+            None,
+        )
+        .await
+    {
         return Err(io::Error::new(
             io::ErrorKind::Other,
-            format!("Unable to delete image {}.", image_id.code_str()),
+            format!(
+                "Unable to delete image {}: {:?}.",
+                image_id.code_str(),
+                error
+            ),
         ));
     }
 
@@ -282,12 +164,12 @@ fn update_timestamp(state: &mut State, image_id: &str, verbose: bool) -> io::Res
 }
 
 // The main vacuum logic
-fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
+async fn vacuum(docker: &Docker, state: &mut State, threshold: &Byte) -> io::Result<()> {
     // Inform the user that Docuum is receiving events from Docker.
     info!("Waking up\u{2026}");
 
     // Determine all the image IDs.
-    let image_ids_and_creation_timestamps = image_ids_and_creation_timestamps()?;
+    let image_ids_and_creation_timestamps = image_ids_and_creation_timestamps(docker).await?;
 
     // Remove non-existent images from `state`.
     state.images.retain(|image_id, _| {
@@ -315,7 +197,7 @@ fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
     }
 
     // Update the timestamps of any images in use.
-    for image_id in image_ids_in_use()? {
+    for image_id in image_ids_in_use(docker).await? {
         update_timestamp(state, &image_id, false)?;
     }
 
@@ -331,7 +213,7 @@ fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
     });
 
     // Check if we're over threshold.
-    let space = space_usage()?;
+    let space = space_usage(docker).await?;
     if space > *threshold {
         info!(
             "Docker images are currently using {} but the limit is {}. Some \
@@ -343,7 +225,7 @@ fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
         // Start deleting images, starting with the least recently used.
         for (image_id, _) in image_ids_vec {
             // Break if we're within the threshold.
-            let new_space = space_usage()?;
+            let new_space = space_usage(docker).await?;
             if new_space <= *threshold {
                 info!(
                     "Docker images are now using {}, which is within the limit of {}.",
@@ -354,7 +236,7 @@ fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
             }
 
             // Delete the image and continue.
-            if let Err(error) = delete_image(image_id) {
+            if let Err(error) = delete_image(docker, image_id).await {
                 error!("{}", error);
             }
         }
@@ -376,80 +258,81 @@ fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
 }
 
 // Stream Docker events and vacuum when necessary.
-pub fn run(settings: &Settings, state: &mut State) -> io::Result<()> {
+pub async fn run(settings: &Settings, state: &mut State) -> io::Result<()> {
+    let docker = Docker::connect_with_local_defaults().map_err(|error| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!("Unable to connect to Docker: {:?}.", error),
+        )
+    })?;
+
     // Run the main vacuum logic.
-    vacuum(state, &settings.threshold)?;
+    vacuum(&docker, state, &settings.threshold).await?;
 
-    // Spawn `docker events --format '{{json .}}'`.
-    let mut child = guard(
-        Command::new("docker")
-            .args(&["events", "--format", "{{json .}}"])
-            .stdout(Stdio::piped())
-            .spawn()?,
-        |mut child| {
-            let _ = child.kill();
-            let _ = child.wait();
-        },
-    );
-
-    // Buffer the data as we read it line-by-line.
-    let reader = BufReader::new(child.stdout.as_mut().map_or_else(
-        || {
-            Err(io::Error::new(
+    let mut events = docker.events(Option::<EventsOptions<String>>::None);
+    loop {
+        let event = match events.next().await {
+            Some(event) => event,
+            None => break,
+        }
+        .map_err(|error| {
+            io::Error::new(
                 io::ErrorKind::Other,
-                format!("Unable to read output from {}.", "docker events".code_str()),
-            ))
-        },
-        Ok,
-    )?);
+                format!("Unable to read Docker events: {:?}.", error),
+            )
+        })?;
 
-    // Handle each incoming event.
-    for line_option in reader.lines() {
-        // Unwrap the line.
-        let line = line_option?;
-        debug!("Incoming event: {}", line.code_str());
+        debug!("Incoming event: {:?}", event);
 
-        // Parse the line as an event.
-        let event = match serde_json::from_str::<Event>(&line) {
-            Ok(event) => {
-                debug!("Parsed as: {}", format!("{:?}", event).code_str());
-                event
-            }
-            Err(error) => {
-                debug!("Skipping due to: {}", error);
-                continue;
-            }
+        // Bollard uses _type instead of r#type or type_: fussybeaver/bollard#87
+        #[allow(clippy::used_underscore_binding)]
+        let (r#type, action) = match (event._type, event.action) {
+            (Some(r#type), Some(action)) => (r#type, action),
+            _ => continue,
         };
 
         // Get the ID of the image.
         let image_id = image_id(
-            &if event.r#type == "container" && event.action == "destroy" {
-                if let Some(image_name) = event.actor.attributes.image {
-                    image_name
-                } else {
-                    debug!("Invalid Docker event.");
+            &docker,
+            &match (r#type.as_str(), action.as_str()) {
+                ("container", "destroy") => {
+                    if let Some(image_name) = event
+                        .actor
+                        .and_then(|actor| actor.attributes)
+                        .and_then(|mut attributes| attributes.remove("image"))
+                    {
+                        image_name
+                    } else {
+                        debug!("Invalid Docker event.");
+                        continue;
+                    }
+                }
+                ("image", "import")
+                | ("image", "load")
+                | ("image", "pull")
+                | ("image", "push")
+                | ("image", "save")
+                | ("image", "tag") => {
+                    if let Some(id) = event.actor.and_then(|actor| actor.id) {
+                        id
+                    } else {
+                        debug!("Invalid Docker event.");
+                        continue;
+                    }
+                }
+                _ => {
+                    debug!("Skipping due to irrelevance.");
                     continue;
                 }
-            } else if event.r#type == "image"
-                && (event.action == "import"
-                    || event.action == "load"
-                    || event.action == "pull"
-                    || event.action == "push"
-                    || event.action == "save"
-                    || event.action == "tag")
-            {
-                event.id
-            } else {
-                debug!("Skipping due to irrelevance.");
-                continue;
             },
-        )?;
+        )
+        .await?;
 
         // Update the timestamp for this image.
         update_timestamp(state, &image_id, true)?;
 
         // Run the main vacuum logic. This will also persist the state [ref:vacuum_persists_state].
-        vacuum(state, &settings.threshold)?;
+        vacuum(&docker, state, &settings.threshold).await?;
     }
 
     // The `for` loop above will only terminate if something happened to `docker events`.
