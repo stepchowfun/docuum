@@ -14,7 +14,7 @@ readme = "README.md"
 
 [dependencies]
 atty = "0.2"
-bollard = "0.7"
+bollard = "0.7.2"
 byte-unit = "3.0"
 chrono = "0.4"
 colored = "1"
