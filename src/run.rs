@@ -109,10 +109,10 @@ async fn space_usage(docker: &Docker) -> io::Result<Byte> {
 }
 
 // Delete a Docker image.
-async fn delete_image(docker: &Docker, image_id: &str) -> io::Result<()> {
+async fn delete_image(docker: &Docker, image_id: &str) -> Result<(), bollard::errors::Error> {
     info!("Deleting image {}\u{2026}", image_id.code_str());
 
-    if let Err(error) = docker
+    docker
         .remove_image(
             image_id,
             Some(RemoveImageOptions {
@@ -121,17 +121,7 @@ async fn delete_image(docker: &Docker, image_id: &str) -> io::Result<()> {
             }),
             None,
         )
-        .await
-    {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!(
-                "Unable to delete image {}: {:?}.",
-                image_id.code_str(),
-                error
-            ),
-        ));
-    }
+        .await?;
 
     Ok(())
 }
@@ -220,6 +210,32 @@ async fn vacuum(docker: &Docker, state: &mut State, threshold: &Byte) -> io::Res
 
         // Start deleting images, starting with the least recently used.
         for (image_id, _) in image_ids_vec {
+            // Delete the image.
+            if let Err(error) = delete_image(docker, image_id).await {
+                match error.kind() {
+                    bollard::errors::ErrorKind::DockerResponseNotFoundError { .. }
+                    | bollard::errors::ErrorKind::DockerResponseServerError { .. }
+                    | bollard::errors::ErrorKind::DockerResponseConflictError { .. }
+                    | bollard::errors::ErrorKind::DockerResponseNotModifiedError { .. } => {
+                        error!("Unable to delete image {}: {}.", image_id.code_str(), error);
+
+                        // We couldn't delete, so don't recompute space before attempting next image.
+                        continue;
+                    }
+                    _ => {
+                        // Docuum error? Docker is gone?
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            format!(
+                                "Unexpected error when deleting {}: {}.",
+                                image_id.code_str(),
+                                error
+                            ),
+                        ));
+                    }
+                }
+            }
+
             // Break if we're within the threshold.
             let new_space = space_usage(docker).await?;
             if new_space <= *threshold {
@@ -229,11 +245,6 @@ async fn vacuum(docker: &Docker, state: &mut State, threshold: &Byte) -> io::Res
                     threshold.get_appropriate_unit(false).to_string().code_str(),
                 );
                 break;
-            }
-
-            // Delete the image and continue.
-            if let Err(error) = delete_image(docker, image_id).await {
-                error!("{}", error);
             }
         }
     } else {
