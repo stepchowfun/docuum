@@ -136,6 +136,7 @@ tasks:
   release:
     dependencies:
       - fetch_crates
+      - test
     input_paths:
       - src
     output_paths:

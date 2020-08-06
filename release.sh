@@ -20,6 +20,7 @@ set -euo pipefail
 (
   # x86-64 macOS build
   rm -rf target/release
+  cargo test
   cargo build --release
 
   # x86-64 GNU/Linux build
