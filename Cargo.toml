@@ -14,14 +14,13 @@ readme = "README.md"
 
 [dependencies]
 atty = "0.2"
+bollard = "0.7.2"
 byte-unit = "3.0"
 chrono = "0.4"
 colored = "1"
 dirs = "1"
 env_logger = "0.6"
 log = "0.4"
-scopeguard = "1.0"
-serde_json = "1.0"
 serde_yaml = "0.8"
 
 [dependencies.clap]
@@ -31,3 +30,7 @@ features = ["wrap_help"]
 [dependencies.serde]
 version = "1"
 features = ["derive"]
+
+[dependencies.tokio]
+version = "0.2"
+features = ["macros", "time"]
