@@ -20,7 +20,6 @@ use tokio::stream::StreamExt;
 
 // Ask Docker for the ID of an image.
 pub async fn image_id(docker: &Docker, image: &str) -> io::Result<String> {
-    // Query Docker for the image ID.
     let output = docker.inspect_image(image).await.map_err(|error| {
         io::Error::new(
             io::ErrorKind::Other,
@@ -35,11 +34,10 @@ pub async fn image_id(docker: &Docker, image: &str) -> io::Result<String> {
     Ok(output.id)
 }
 
-// Ask Docker for the IDs of all the images.
+// Ask Docker for the IDs and creation timestamps of all the images.
 pub async fn image_ids_and_creation_timestamps(
     docker: &Docker,
 ) -> io::Result<HashMap<String, Duration>> {
-    // Query Docker for the image IDs.
     let output = docker
         .list_images(Some(ListImagesOptions {
             all: true,
@@ -57,16 +55,16 @@ pub async fn image_ids_and_creation_timestamps(
 
     for image in output {
         match image.created.try_into() {
-            Ok(unsigned) => images.insert(image.id, Duration::from_secs(unsigned)),
-            Err(e) => return Err(io::Error::new(io::ErrorKind::Other, e)),
+            Ok(created) => images.insert(image.id, Duration::from_secs(created)),
+            Err(error) => return Err(io::Error::new(io::ErrorKind::Other, error)),
         };
     }
+
     Ok(images)
 }
 
 // Ask Docker for the IDs of the images currently in use by containers.
 pub async fn image_ids_in_use(docker: &Docker) -> io::Result<HashSet<String>> {
-    // Query Docker for the image IDs.
     let output = docker
         .list_containers(Some(ListContainersOptions {
             all: true,
@@ -91,7 +89,6 @@ pub async fn image_ids_in_use(docker: &Docker) -> io::Result<HashSet<String>> {
 
 // Get the total space used by Docker images.
 async fn space_usage(docker: &Docker) -> io::Result<Byte> {
-    // Query Docker for the space usage.
     let output = docker.df().await.map_err(|error| {
         io::Error::new(
             io::ErrorKind::Other,
@@ -105,7 +102,7 @@ async fn space_usage(docker: &Docker) -> io::Result<Byte> {
     Ok(Byte::from_bytes(
         output
             .layers_size
-            // Assumes total size is non-negative.
+            // The `unwrap` is safe assuming that the space usage is non-negative.
             .map_or(0_u64, |size| size.try_into().unwrap())
             .into(),
     ))
@@ -115,7 +112,6 @@ async fn space_usage(docker: &Docker) -> io::Result<Byte> {
 async fn delete_image(docker: &Docker, image_id: &str) -> io::Result<()> {
     info!("Deleting image {}\u{2026}", image_id.code_str());
 
-    // Tell Docker to delete the image.
     if let Err(error) = docker
         .remove_image(
             image_id,
@@ -271,6 +267,7 @@ pub async fn run(settings: &Settings, state: &mut State) -> io::Result<()> {
 
     let mut events = docker.events(Option::<EventsOptions<String>>::None);
     loop {
+        // Wait until there's an event to handle.
         let event = match events.next().await {
             Some(event) => event,
             None => break,
@@ -284,7 +281,9 @@ pub async fn run(settings: &Settings, state: &mut State) -> io::Result<()> {
 
         debug!("Incoming event: {:?}", event);
 
-        // Bollard uses _type instead of r#type or type_: fussybeaver/bollard#87
+        // Extract the event type and action. The Clippy directive is needed because Bollard uses
+        // `_type` instead of `r#type` or `type_`. See
+        // https://github.com/fussybeaver/bollard/issues/87 for details.
         #[allow(clippy::used_underscore_binding)]
         let (r#type, action) = match (event._type, event.action) {
             (Some(r#type), Some(action)) => (r#type, action),
