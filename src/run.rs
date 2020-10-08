@@ -27,7 +27,7 @@ struct ImageInfo {
     created_since_epoch: Duration,
 }
 
-// This struct represents a node in the image tree.
+// This struct represents a node in the image polyforest.
 #[derive(Clone, Debug)]
 struct ImageNode {
     image_info: ImageInfo,
@@ -421,9 +421,9 @@ pub async fn run(settings: &Settings, state: &mut State) -> io::Result<()> {
         )
     })?;
 
-    // Run the main vacuum logic.
     info!("Performing an initial vacuum on startup\u{2026}");
     vacuum(&docker, state, &settings.threshold).await?;
+    state::save(&state)?;
 
     info!("Listening for Docker events\u{2026}");
     let mut events = docker.events(Option::<EventsOptions<String>>::None);
