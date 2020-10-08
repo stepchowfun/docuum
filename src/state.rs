@@ -8,12 +8,24 @@ use std::{
     time::Duration,
 };
 
+// What we want to remember about an individual image
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Image {
+    // The ID of the parent image, if it exists
+    pub parent_id: Option<String>,
+
+    // The amount of time that has passed between the UNIX epoch and the moment the image was
+    // most recently used
+    pub last_used_since_epoch: Duration,
+}
+
 // The program state
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct State {
-    // Map from image ID to last use time expressed as a duration since the UNIX epoch
-    pub images: HashMap<String, Duration>,
+    // Map from image ID to `Image`
+    pub images: HashMap<String, Image>,
 }
 
 // Where the program state is persisted on disk
