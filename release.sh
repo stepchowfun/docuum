@@ -18,13 +18,13 @@ set -euo pipefail
 # We wrap everything in parentheses to ensure that any working directory changes with `cd` are local
 # to this script and don't affect the calling user's shell.
 (
-  # x86-64 GNU/Linux build
-  rm -rf artifacts
-  toast release
-
   # x86-64 macOS build
   rm -rf target/release
   cargo build --release
+
+  # x86-64 GNU/Linux build
+  rm -rf artifacts
+  toast release
 
   # Prepare the `release` directory.
   rm -rf release
