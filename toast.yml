@@ -134,8 +134,8 @@ tasks:
 
   release:
     dependencies:
-      - fetch_crates
       - test
+      - lint
     input_paths:
       - src
     output_paths:

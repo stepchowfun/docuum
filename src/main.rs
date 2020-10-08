@@ -119,8 +119,8 @@ fn settings() -> io::Result<Settings> {
     Ok(Settings { threshold })
 }
 
-#[tokio::main]
 // Let the fun begin!
+#[tokio::main]
 async fn main() {
     // Determine whether to print colored output.
     colored::control::set_override(atty::is(Stream::Stderr));

@@ -11,7 +11,7 @@ use bollard::{
 };
 use byte_unit::Byte;
 use std::{
-    cell::RefCell,
+    cmp::max,
     collections::{HashMap, HashSet},
     convert::TryInto,
     io,
@@ -19,8 +19,24 @@ use std::{
 };
 use tokio::stream::StreamExt;
 
+// This struct represents the information `docker image list` reports about an image.
+#[derive(Clone, Debug)]
+struct ImageInfo {
+    id: String,
+    parent_id: Option<String>,
+    created_since_epoch: Duration,
+}
+
+// This struct represents a node in the image tree.
+#[derive(Clone, Debug)]
+struct ImageNode {
+    image_info: ImageInfo,
+    last_used_since_epoch: Duration,
+    ancestors: usize, // 0 for images with no parent or missing parent
+}
+
 // Ask Docker for the ID of an image.
-pub async fn image_id(docker: &Docker, image: &str) -> io::Result<String> {
+async fn image_id(docker: &Docker, image: &str) -> io::Result<String> {
     let output = docker.inspect_image(image).await.map_err(|error| {
         io::Error::new(
             io::ErrorKind::Other,
@@ -35,14 +51,8 @@ pub async fn image_id(docker: &Docker, image: &str) -> io::Result<String> {
     Ok(output.id)
 }
 
-pub struct DockerImageInfo {
-    id: String,
-    parent_id: String,
-    created_since_epoch: Duration,
-}
-
 // Ask Docker for information about all images currently present.
-pub async fn image_info(docker: &Docker) -> io::Result<Vec<DockerImageInfo>> {
+async fn list_images(docker: &Docker) -> io::Result<Vec<ImageInfo>> {
     let output = docker
         .list_images(Some(ListImagesOptions {
             all: true,
@@ -59,18 +69,29 @@ pub async fn image_info(docker: &Docker) -> io::Result<Vec<DockerImageInfo>> {
     output
         .into_iter()
         .map(|image| match image.created.try_into() {
-            Ok(created) => Ok(DockerImageInfo {
+            Ok(created) => Ok(ImageInfo {
                 id: image.id,
-                parent_id: image.parent_id,
+                parent_id: if image.parent_id.is_empty() {
+                    None
+                } else {
+                    Some(image.parent_id)
+                },
                 created_since_epoch: Duration::from_secs(created),
             }),
-            Err(error) => Err(io::Error::new(io::ErrorKind::Other, error)),
+            Err(error) => Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!(
+                    "Unable to determine the creation timestamp of image {}: {:?}.",
+                    image.id.code_str(),
+                    error
+                ),
+            )),
         })
         .collect()
 }
 
 // Ask Docker for the IDs of the images currently in use by containers.
-pub async fn image_ids_in_use(docker: &Docker) -> io::Result<HashSet<String>> {
+async fn image_ids_in_use(docker: &Docker) -> io::Result<HashSet<String>> {
     let output = docker
         .list_containers(Some(ListContainersOptions {
             all: true,
@@ -133,7 +154,7 @@ async fn delete_image(docker: &Docker, image_id: &str) -> Result<(), bollard::er
 }
 
 // Update the timestamp for an image.
-fn update_timestamp(state: &mut State, image_id: &str, verbose: bool) -> io::Result<()> {
+fn touch_image(state: &mut State, image_id: &str, verbose: bool) -> io::Result<()> {
     if verbose {
         info!(
             "Updating last-used timestamp for image {}\u{2026}",
@@ -151,139 +172,169 @@ fn update_timestamp(state: &mut State, image_id: &str, verbose: bool) -> io::Res
             state.images.insert(image_id.to_owned(), duration);
             Ok(())
         }
-        Err(error) => Err(io::Error::new(io::ErrorKind::Other, error)),
-    }
-}
-
-struct ImageNode<'a> {
-    docker_image: &'a DockerImageInfo,
-    last_used_since_epoch: Duration,
-    height: Option<u32>,
-}
-
-fn populate_node_height(nodes: &HashMap<&str, RefCell<ImageNode>>) {
-    let mut node_stack = Vec::<&str>::new();
-    'outer: for mut node_cell in nodes.values() {
-        loop {
-            let mut node = node_cell.borrow_mut();
-            let parent_cell = if node.docker_image.parent_id == "" {
-                None
-            } else {
-                nodes.get(node.docker_image.parent_id.as_str())
-            };
-
-            if parent_cell.is_none() {
-                if node.docker_image.parent_id != "" {
-                    warn!(
-                        "Image {} has unknown parent {}",
-                        node.docker_image.id.code_str(),
-                        node.docker_image.parent_id.code_str()
-                    );
-                }
-
-                node.height = Some(0);
-            }
-
-            if let Some(mut height) = node.height {
-                loop {
-                    match node_stack.pop() {
-                        Some(image_id) => {
-                            height = height.saturating_add(1);
-                            nodes[image_id].borrow_mut().height = Some(height);
-                        }
-                        None => continue 'outer,
-                    }
-                }
-            }
-
-            node_stack.push(&node.docker_image.id);
-            // This `unwrap` is safe because the above logic breaks out of the loop on None.
-            node_cell = parent_cell.unwrap();
-        }
-    }
-}
-
-fn fix_node_timestamps(nodes: &HashMap<&str, RefCell<ImageNode>>) {
-    for node in nodes.values() {
-        let mut node = node.borrow_mut();
-        loop {
-            let parent = if node.docker_image.parent_id == "" {
-                None
-            } else {
-                nodes.get(node.docker_image.parent_id.as_str())
-            };
-
-            if let Some(parent) = parent {
-                let mut parent = parent.borrow_mut();
-                if node.last_used_since_epoch <= parent.last_used_since_epoch {
-                    break;
-                }
-
-                parent.last_used_since_epoch = node.last_used_since_epoch;
-                node = parent;
-            } else {
-                break;
-            }
-        }
+        Err(error) => Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!("Unable to compute the current timestamp: {:?}.", error),
+        )),
     }
 }
 
 // The main vacuum logic
+#[allow(clippy::too_many_lines)]
 async fn vacuum(docker: &Docker, state: &mut State, threshold: &Byte) -> io::Result<()> {
-    // Inform the user that Docuum is receiving events from Docker.
-    info!("Waking up\u{2026}");
-
     // Find all current images.
-    let image_info = image_info(docker).await?;
+    let image_infos = list_images(docker).await?;
 
-    // Update the timestamps of any images in use.
-    for image_id in image_ids_in_use(docker).await? {
-        update_timestamp(state, &image_id, false)?;
+    // Find all images in use by containers.
+    let image_ids_in_use = image_ids_in_use(docker).await?;
+
+    // Construct a map from image ID to image info.
+    let mut image_map = HashMap::new();
+    for image_info in &image_infos {
+        image_map.insert(image_info.id.clone(), image_info.clone());
     }
 
-    let mut nodes = HashMap::with_capacity(image_info.len());
-    for docker_image in &image_info {
-        let last_used_since_epoch = if let Some(state_image) = state.images.get(&docker_image.id) {
-            *state_image
-        } else {
-            debug!(
-                "Adding missing record for image {}\u{2026}",
-                &docker_image.id.code_str(),
+    // Construct a polyforest of image nodes that reflects the parent-child relationships.
+    let mut image_graph = HashMap::new();
+    for image_info in &image_infos {
+        // Find the ancestors of the current image, including the current image itself, excluding
+        // the root ancestor. The root will be added to the polyforest directly, and later we'll
+        // add the other ancestors as well. The first postcondition is that, for every image in
+        // this list except the final image, the parent is the subsequent image. The second
+        // postcondition is that the parent of the final image has already been added to the
+        // polyforest.
+        let mut image_infos_to_add = vec![];
+        let mut image_info = image_info.clone();
+        loop {
+            // Is the image already in the polyforest?
+            if image_graph.contains_key(&image_info.id) {
+                // The image has already been added.
+                break;
+            }
+
+            // Does the image have a parent?
+            if let Some(parent_id) = &image_info.parent_id {
+                // The image has a parent, but does it actually exist?
+                if let Some(parent_info) = image_map.get(parent_id) {
+                    // It does. Add it to the list of images to add and continue.
+                    image_infos_to_add.push(image_info.clone());
+                    image_info = parent_info.clone();
+                    continue;
+                }
+            }
+
+            // The image is a root because either it has no parent or the parent doesn't exist.
+            // Compute the last used date.
+            let last_used_since_epoch =
+                if let Some(last_used_since_epoch) = state.images.get(&image_info.id) {
+                    *last_used_since_epoch
+                } else {
+                    image_info.created_since_epoch
+                };
+
+            // Add the image to the polyforest and break.
+            image_graph.insert(
+                image_info.id.clone(),
+                ImageNode {
+                    image_info: image_info.clone(),
+                    last_used_since_epoch,
+                    ancestors: 0,
+                },
             );
+            break;
+        }
 
-            state
-                .images
-                .insert(docker_image.id.clone(), docker_image.created_since_epoch);
-            docker_image.created_since_epoch
-        };
+        // Add the ancestor images gathered above to the polyforest. We add them in order of
+        // ancestor before descendant because we need to ensure the number of ancestors of the
+        // parent has already been computed when computing that of the child.
+        while let Some(image_info) = image_infos_to_add.pop() {
+            // Look up the parent info. The first `unwrap` is safe because every image in the list
+            // of images to add has a parent. The second `unwrap` is safe because the parent of the
+            // last image to update is guaranteed to be in the polyforest.
+            let parent_node = image_graph
+                .get(&image_info.parent_id.clone().unwrap())
+                .unwrap()
+                .clone();
 
-        nodes.insert(
-            docker_image.id.as_str(),
-            RefCell::new(ImageNode {
-                docker_image,
-                last_used_since_epoch,
-                height: None,
-            }),
-        );
+            // Compute the last used date. Ensure that it's at least as recent as that of the
+            // parent.
+            let mut last_used_since_epoch =
+                if let Some(last_used_since_epoch) = state.images.get(&image_info.id) {
+                    *last_used_since_epoch
+                } else {
+                    image_info.created_since_epoch
+                };
+
+            // If the image is in use by a container, update its timestamp.
+            if image_ids_in_use.contains(&image_info.id) {
+                last_used_since_epoch = max(
+                    last_used_since_epoch,
+                    match SystemTime::now().duration_since(UNIX_EPOCH) {
+                        Ok(duration) => Ok(duration),
+                        Err(error) => Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            format!("Unable to compute the current timestamp: {:?}.", error),
+                        )),
+                    }?,
+                );
+            }
+
+            // Add the image.
+            image_graph.insert(
+                image_info.id.clone(),
+                ImageNode {
+                    image_info: image_info.clone(),
+                    last_used_since_epoch,
+                    ancestors: parent_node.ancestors + 1,
+                },
+            );
+        }
     }
 
-    // Compute the height (total number of image dependencies) for each image.
-    populate_node_height(&nodes);
-    // Ensure that last usage time of each image is greater than or equal to the last usage time of every dependent image.
-    fix_node_timestamps(&nodes);
+    // We need to ensure that each node's last used timestamp is at least as recent as those of all
+    // the transitive descendants. We'll do this via a breadth first traversal, starting with the
+    // leaves. Since we're working with an acyclic graph, we don't need to keep track of a
+    // "visited" set like we usually would for BFS.
+    let mut frontier = image_graph.keys().cloned().collect::<HashSet<_>>();
+    for image_node in image_graph.values() {
+        if let Some(parent_id) = &image_node.image_info.parent_id {
+            frontier.remove(parent_id);
+        }
+    }
+
+    // In each iteration of the outer loop, we traverse the frontier and build up a new frontier
+    // for the subsequent iteration.
+    while !frontier.is_empty() {
+        let mut new_frontier = HashSet::new();
+
+        for image_id in frontier {
+            if let Some(image_node) = image_graph.get(&image_id).cloned() {
+                if let Some(parent_id) = &image_node.image_info.parent_id {
+                    if let Some(parent_node) = image_graph.get_mut(parent_id) {
+                        parent_node.last_used_since_epoch = max(
+                            parent_node.last_used_since_epoch,
+                            image_node.last_used_since_epoch,
+                        );
+                        new_frontier.insert(parent_node.image_info.id.clone());
+                    }
+                }
+            }
+        }
+
+        frontier = new_frontier;
+    }
 
     // Sort the images from least recently used to most recently used.
     // Break ties using the number of dependency layers.
-    let mut image_ids_vec = nodes.iter().collect::<Vec<_>>();
-    image_ids_vec.sort_by(|&x, &y| {
-        let (x, y) = (x.1.borrow(), y.1.borrow());
-        // The two `unwrap`s here are safe because height is set by `populate_node_height`.
+    let mut sorted_image_nodes = image_graph.values().collect::<Vec<_>>();
+    sorted_image_nodes.sort_by(|x, y| {
         x.last_used_since_epoch
             .cmp(&y.last_used_since_epoch)
-            .then(x.height.unwrap().cmp(&y.height.unwrap()).reverse())
+            .then(y.ancestors.cmp(&x.ancestors))
     });
 
-    // Check if we're over threshold.
+    // Check if we're over the threshold.
+    let mut deleted_image_ids = HashSet::new();
     let space = space_usage(docker).await?;
     if space > *threshold {
         info!(
@@ -293,27 +344,31 @@ async fn vacuum(docker: &Docker, state: &mut State, threshold: &Byte) -> io::Res
             threshold.get_appropriate_unit(false).to_string().code_str(),
         );
 
-        // Start deleting images, starting with the least recently used.
-        for (image_id, _) in image_ids_vec {
+        // Start deleting images, beginning with the least recently used.
+        for image_node in sorted_image_nodes {
             // Delete the image.
-            if let Err(error) = delete_image(docker, image_id).await {
-                match error.kind() {
-                    bollard::errors::ErrorKind::DockerResponseNotFoundError { .. }
-                    | bollard::errors::ErrorKind::DockerResponseServerError { .. }
-                    | bollard::errors::ErrorKind::DockerResponseConflictError { .. }
-                    | bollard::errors::ErrorKind::DockerResponseNotModifiedError { .. } => {
-                        error!("Unable to delete image {}: {}.", image_id.code_str(), error);
-
-                        // We couldn't delete, so don't recompute space before attempting next image.
+            if let Err(error) = delete_image(docker, &image_node.image_info.id).await {
+                // We distinguish between two types of errors.
+                // 1. For some known types of errors, we can be certain that the image was not
+                //    deleted, so we skip recomputing the space usage (which is expensive).
+                // 2. For all other types of errors, we err on the safe side and recompute the
+                //    space usage.
+                match error {
+                    bollard::errors::Error::DockerResponseNotFoundError { .. }
+                    | bollard::errors::Error::DockerResponseConflictError { .. } => {
+                        // We know with certainty the image wasn't deleted, so we skip recomputing
+                        // the space usage.
+                        error!("{}", error);
                         continue;
                     }
                     _ => {
-                        // Docuum error? Docker is gone?
+                        // There was some unknown error, but we can't assume the deletion didn't
+                        // actually happen.
                         return Err(io::Error::new(
                             io::ErrorKind::Other,
                             format!(
-                                "Unexpected error when deleting {}: {}.",
-                                image_id.code_str(),
+                                "Unexpected error when deleting image {}: {}.",
+                                image_node.image_info.id.code_str(),
                                 error
                             ),
                         ));
@@ -322,7 +377,7 @@ async fn vacuum(docker: &Docker, state: &mut State, threshold: &Byte) -> io::Res
             }
 
             // Forget about the deleted image.
-            state.images.remove(image_id.to_owned());
+            deleted_image_ids.insert(image_node.image_info.id.clone());
 
             // Break if we're within the threshold.
             let new_space = space_usage(docker).await?;
@@ -343,27 +398,16 @@ async fn vacuum(docker: &Docker, state: &mut State, threshold: &Byte) -> io::Res
         );
     }
 
-    // Synchronize data back to state.
-    state.images.retain(|image_id, last_used_since_epoch| {
-        if let Some(node) = nodes.get(image_id.as_str()) {
-            // Consider a image used if a dependent image was used.
-            *last_used_since_epoch = node.borrow().last_used_since_epoch;
-
-            true
-        } else {
-            debug!(
-                "Removing record for non-existent image {}\u{2026}",
-                image_id.code_str(),
+    // Update the state.
+    state.images.clear();
+    for image_node in image_graph.values() {
+        if !deleted_image_ids.contains(&image_node.image_info.id) {
+            state.images.insert(
+                image_node.image_info.id.clone(),
+                image_node.last_used_since_epoch,
             );
-            false
         }
-    });
-
-    // Persist the state [tag:vacuum_persists_state].
-    state::save(&state)?;
-
-    // Inform the user that we're done for now.
-    info!("Going back to sleep\u{2026}");
+    }
 
     Ok(())
 }
@@ -378,8 +422,10 @@ pub async fn run(settings: &Settings, state: &mut State) -> io::Result<()> {
     })?;
 
     // Run the main vacuum logic.
+    info!("Performing an initial vacuum on startup\u{2026}");
     vacuum(&docker, state, &settings.threshold).await?;
 
+    info!("Listening for Docker events\u{2026}");
     let mut events = docker.events(Option::<EventsOptions<String>>::None);
     loop {
         // Wait until there's an event to handle.
@@ -396,11 +442,8 @@ pub async fn run(settings: &Settings, state: &mut State) -> io::Result<()> {
 
         debug!("Incoming event: {:?}", event);
 
-        // Extract the event type and action. The Clippy directive is needed because Bollard uses
-        // `_type` instead of `r#type` or `type_`. See
-        // https://github.com/fussybeaver/bollard/issues/87 for details.
-        #[allow(clippy::used_underscore_binding)]
-        let (r#type, action) = match (event._type, event.action) {
+        // Extract the event type and action.
+        let (r#type, action) = match (event.typ, event.action) {
             (Some(r#type), Some(action)) => (r#type, action),
             _ => continue,
         };
@@ -442,11 +485,20 @@ pub async fn run(settings: &Settings, state: &mut State) -> io::Result<()> {
         )
         .await?;
 
-        // Update the timestamp for this image.
-        update_timestamp(state, &image_id, true)?;
+        // Inform the user that we're about to vacuum.
+        info!("Waking up\u{2026}");
 
-        // Run the main vacuum logic. This will also persist the state [ref:vacuum_persists_state].
+        // Update the timestamp for this image.
+        touch_image(state, &image_id, true)?;
+
+        // Run the main vacuum logic.
         vacuum(&docker, state, &settings.threshold).await?;
+
+        // Persist the state.
+        state::save(&state)?;
+
+        // Inform the user that we're done for now.
+        info!("Going back to sleep\u{2026}");
     }
 
     // The `for` loop above will only terminate if something happened to `docker events`.
@@ -454,236 +506,4 @@ pub async fn run(settings: &Settings, state: &mut State) -> io::Result<()> {
         io::ErrorKind::Other,
         format!("{} unexpectedly terminated.", "docker events".code_str()),
     ))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn update_timestamp_for_new_image() {
-        const IMAGE_ID: &str = "3e7dc008597313a826cd0533ae7ead7af49a8a9a35711a239d5b7924bec4db1c";
-
-        let mut state = State {
-            images: HashMap::new(),
-        };
-
-        update_timestamp(&mut state, IMAGE_ID, true).expect("Update failed");
-
-        let time = state.images.get(IMAGE_ID);
-        assert!(time.is_some(), "Image was not added to state");
-    }
-
-    #[test]
-    fn update_timestamp_for_existing_image() {
-        const IMAGE_ID: &str = "3e7dc008597313a826cd0533ae7ead7af49a8a9a35711a239d5b7924bec4db1c";
-
-        let mut state = State {
-            images: vec![(IMAGE_ID.to_owned(), Duration::default())]
-                .into_iter()
-                .collect(),
-        };
-
-        update_timestamp(&mut state, IMAGE_ID, true).expect("Update failed");
-
-        let time = state.images.get(IMAGE_ID);
-        assert!(time.is_some(), "Image was not added to state");
-        assert_ne!(&Duration::default(), time.unwrap());
-    }
-
-    #[test]
-    fn populate_node_height_with_complete_data() {
-        const NODE_1: &str = "488f2572ca8f6d9ab06284f1bdbe222323fae563d748ff71688480fc2d1a3c0b";
-        const NODE_1_1: &str = "5efe99e2856f3be4fbc8bd7df7b243cc34972dee5251467b454ef91c40ee85f4";
-        const NODE_1_1_1: &str = "1d1134b3c8b022eec5df7feb1a753e7a9084103fbdccc57726dcf53cd76e832d";
-        const NODE_1_2: &str = "f9179b875976bbb530602cd3e46dfce53cab405feff828a79df18e1ceda4a89e";
-        const NODE_2: &str = "67a1482a87761ac983be23f342c48a721a6a836203f8ce259dd7285bcfe29470";
-
-        let infos = vec![
-            DockerImageInfo {
-                id: NODE_1.to_owned(),
-                parent_id: String::default(),
-                created_since_epoch: Duration::default(),
-            },
-            DockerImageInfo {
-                id: NODE_1_1.to_owned(),
-                parent_id: NODE_1.to_owned(),
-                created_since_epoch: Duration::default(),
-            },
-            DockerImageInfo {
-                id: NODE_1_1_1.to_owned(),
-                parent_id: NODE_1_1.to_owned(),
-                created_since_epoch: Duration::default(),
-            },
-            DockerImageInfo {
-                id: NODE_1_2.to_owned(),
-                parent_id: NODE_1.to_owned(),
-                created_since_epoch: Duration::default(),
-            },
-            DockerImageInfo {
-                id: NODE_2.to_owned(),
-                parent_id: String::default(),
-                created_since_epoch: Duration::default(),
-            },
-        ];
-
-        let nodes = infos
-            .iter()
-            .map(|docker_image| {
-                (
-                    docker_image.id.as_str(),
-                    RefCell::new(ImageNode {
-                        docker_image,
-                        last_used_since_epoch: Duration::default(),
-                        height: None,
-                    }),
-                )
-            })
-            .collect();
-
-        populate_node_height(&nodes);
-
-        assert_eq!(Some(0), nodes[NODE_1].borrow().height);
-        assert_eq!(Some(1), nodes[NODE_1_1].borrow().height);
-        assert_eq!(Some(2), nodes[NODE_1_1_1].borrow().height);
-        assert_eq!(Some(1), nodes[NODE_1_2].borrow().height);
-        assert_eq!(Some(0), nodes[NODE_2].borrow().height);
-    }
-
-    #[test]
-    fn populate_node_height_with_missing_parent() {
-        const PARENT: &str = "94438846870b604603c351458f13a50afc3e70ce70d94f3953cc641240f628ef";
-        const CHILD: &str = "af480962dde156510ae4234a4479c40d83db562ec9026f185be0c2432a9aa2ae";
-
-        let infos = vec![DockerImageInfo {
-            id: CHILD.to_owned(),
-            parent_id: PARENT.to_owned(),
-            created_since_epoch: Duration::default(),
-        }];
-
-        let nodes = infos
-            .iter()
-            .map(|docker_image| {
-                (
-                    docker_image.id.as_str(),
-                    RefCell::new(ImageNode {
-                        docker_image,
-                        last_used_since_epoch: Duration::default(),
-                        height: None,
-                    }),
-                )
-            })
-            .collect();
-
-        populate_node_height(&nodes);
-
-        assert_eq!(Some(0), nodes[CHILD].borrow().height);
-    }
-
-    #[test]
-    fn fix_node_timestamps_with_complete_data() {
-        const NODE_1: &str = "488f2572ca8f6d9ab06284f1bdbe222323fae563d748ff71688480fc2d1a3c0b";
-        const NODE_1_1: &str = "5efe99e2856f3be4fbc8bd7df7b243cc34972dee5251467b454ef91c40ee85f4";
-        const NODE_1_1_1: &str = "1d1134b3c8b022eec5df7feb1a753e7a9084103fbdccc57726dcf53cd76e832d";
-        const NODE_1_2: &str = "f9179b875976bbb530602cd3e46dfce53cab405feff828a79df18e1ceda4a89e";
-        const NODE_2: &str = "67a1482a87761ac983be23f342c48a721a6a836203f8ce259dd7285bcfe29470";
-
-        let infos = vec![
-            DockerImageInfo {
-                id: NODE_1.to_owned(),
-                parent_id: String::default(),
-                created_since_epoch: Duration::from_secs(3),
-            },
-            DockerImageInfo {
-                id: NODE_1_1.to_owned(),
-                parent_id: NODE_1.to_owned(),
-                created_since_epoch: Duration::from_secs(1),
-            },
-            DockerImageInfo {
-                id: NODE_1_1_1.to_owned(),
-                parent_id: NODE_1_1.to_owned(),
-                created_since_epoch: Duration::from_secs(2),
-            },
-            DockerImageInfo {
-                id: NODE_1_2.to_owned(),
-                parent_id: NODE_1.to_owned(),
-                created_since_epoch: Duration::from_secs(3),
-            },
-            DockerImageInfo {
-                id: NODE_2.to_owned(),
-                parent_id: String::default(),
-                created_since_epoch: Duration::from_secs(1),
-            },
-        ];
-
-        let nodes = infos
-            .iter()
-            .map(|docker_image| {
-                (
-                    docker_image.id.as_str(),
-                    RefCell::new(ImageNode {
-                        docker_image,
-                        last_used_since_epoch: docker_image.created_since_epoch,
-                        height: None,
-                    }),
-                )
-            })
-            .collect();
-
-        fix_node_timestamps(&nodes);
-
-        assert_eq!(
-            Duration::from_secs(3),
-            nodes[NODE_1].borrow().last_used_since_epoch
-        );
-        assert_eq!(
-            Duration::from_secs(2),
-            nodes[NODE_1_1].borrow().last_used_since_epoch
-        );
-        assert_eq!(
-            Duration::from_secs(2),
-            nodes[NODE_1_1_1].borrow().last_used_since_epoch
-        );
-        assert_eq!(
-            Duration::from_secs(3),
-            nodes[NODE_1_2].borrow().last_used_since_epoch
-        );
-        assert_eq!(
-            Duration::from_secs(1),
-            nodes[NODE_2].borrow().last_used_since_epoch
-        );
-    }
-
-    #[test]
-    fn fix_node_timestamps_with_missing_parent() {
-        const PARENT: &str = "94438846870b604603c351458f13a50afc3e70ce70d94f3953cc641240f628ef";
-        const CHILD: &str = "af480962dde156510ae4234a4479c40d83db562ec9026f185be0c2432a9aa2ae";
-
-        let infos = vec![DockerImageInfo {
-            id: CHILD.to_owned(),
-            parent_id: PARENT.to_owned(),
-            created_since_epoch: Duration::from_secs(1),
-        }];
-
-        let nodes = infos
-            .iter()
-            .map(|docker_image| {
-                (
-                    docker_image.id.as_str(),
-                    RefCell::new(ImageNode {
-                        docker_image,
-                        last_used_since_epoch: docker_image.created_since_epoch,
-                        height: None,
-                    }),
-                )
-            })
-            .collect();
-
-        fix_node_timestamps(&nodes);
-
-        assert_eq!(
-            Duration::from_secs(1),
-            nodes[CHILD].borrow().last_used_since_epoch
-        );
-    }
 }
