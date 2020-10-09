@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2020-10-08
+
+### Changed
+- Docuum now uses the Docker CLI rather than the Docker API to communicate with the Docker daemon. This was motivated by a recent issue in which Docuum mysteriously stopped being able to stream events from Docker. At the time of this writing, it's not clear whether the issue is with Bollard (our Docker API library) or with the Docker API itself, but we know that the Docker CLI continues to work. See https://github.com/fussybeaver/bollard/issues/113 for details. Unfortunately, this is a **breaking change** because the schema for the state has changed.
+
 ## [0.13.1] - 2020-10-08
 
 ### Fixed
