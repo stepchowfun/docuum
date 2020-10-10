@@ -388,9 +388,11 @@ fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
         // Find the ancestors of the current image, including the current image itself, excluding
         // the root ancestor. The root will be added to the polyforest directly, and later we'll
         // add the other ancestors as well. The first postcondition is that, for every image in
-        // this list except the final image, the parent is the subsequent image. The second
-        // postcondition is that the parent of the final image has already been added to the
-        // polyforest.
+        // this list except the final image, the parent is the subsequent image
+        // [tag:image_infos_to_add_subsequent_is_parent]. The second postcondition is that the
+        // parent of the final image has already been added to the polyforest
+        // [tag:image_infos_to_add_last_in_polyforest]. Together, these postconditions imply that
+        // every image in this list has a parent [tag:image_infos_to_add_have_parents].
         let mut image_infos_to_add = vec![];
         let mut image_info = image_info.clone();
         loop {
@@ -434,10 +436,11 @@ fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
         // Add the ancestor images gathered above to the polyforest. We add them in order of
         // ancestor before descendant because we need to ensure the number of ancestors of the
         // parent has already been computed when computing that of the child.
+        // [ref:image_infos_to_add_subsequent_is_parent]
         while let Some(image_info) = image_infos_to_add.pop() {
-            // Look up the parent info. The first `unwrap` is safe because every image in the list
-            // of images to add has a parent. The second `unwrap` is safe because the parent of the
-            // last image to update is guaranteed to be in the polyforest.
+            // Look up the parent info. The first `unwrap` is safe due to
+            // [ref:image_infos_to_add_have_parents]. The second `unwrap` is safe due to
+            // [ref:image_infos_to_add_last_in_polyforest].
             let parent_node = image_graph
                 .get(&image_info.parent_id.clone().unwrap())
                 .unwrap()
