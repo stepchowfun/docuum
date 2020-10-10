@@ -11,8 +11,9 @@ set -euo pipefail
 #    request.
 # 2. Run this script and upload the files in the `release` directory to GitHub as release artifacts.
 # 3. Build and upload the Docker image:
-#      docker build --tag stephanmisc/docuum --tag stephanmisc/docuum:X.Y.Z .
-#      docker push stephanmisc/docuum
+#      docker build --tag stephanmisc/docuum:latest --tag stephanmisc/docuum:X.Y.Z .
+#      docker push stephanmisc/docuum:latest
+#      docker push stephanmisc/docuum:X.Y.Z
 # 4. Update the version in `install.sh` to point to the new release.
 
 # We wrap everything in parentheses to ensure that any working directory changes with `cd` are local
