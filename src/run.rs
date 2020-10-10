@@ -54,7 +54,7 @@ struct SpaceRecord {
 }
 
 // The information we get about an image from Docker
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct ImageInfo {
     id: String,
     parent_id: Option<String>,
@@ -62,7 +62,7 @@ struct ImageInfo {
 }
 
 // A node in the image polyforest
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct ImageNode {
     image_info: ImageInfo,
     last_used_since_epoch: Duration,
@@ -367,24 +367,23 @@ fn touch_image(state: &mut State, image_id: &str, verbose: bool) -> io::Result<(
     }
 }
 
-// The main vacuum logic
-#[allow(clippy::too_many_lines)]
-fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
-    // Find all current images.
-    let image_infos = list_images(state)?;
-
-    // Find all images in use by containers.
-    let image_ids_in_use = image_ids_in_use()?;
-
+// Construct a polyforest of image nodes that reflects their parent-child relationships.
+fn construct_polyforest(
+    state: &State,
+    image_infos: &[ImageInfo],
+    image_ids_in_use: &HashSet<String>,
+) -> io::Result<HashMap<String, ImageNode>> {
     // Construct a map from image ID to image info.
     let mut image_map = HashMap::new();
-    for image_info in &image_infos {
+    for image_info in image_infos {
         image_map.insert(image_info.id.clone(), image_info.clone());
     }
 
-    // Construct a polyforest of image nodes that reflects the parent-child relationships.
+    // Construct the graph. It's a map, just like above, except it has `ImageNode`s rather than
+    // `ImageInfo`s. The majority of this code exists just to compute the number of ancestors for
+    // each node.
     let mut image_graph = HashMap::new();
-    for image_info in &image_infos {
+    for image_info in image_infos {
         // Find the ancestors of the current image, including the current image itself, excluding
         // the root ancestor. The root will be added to the polyforest directly, and later we'll
         // add the other ancestors as well. The first postcondition is that, for every image in
@@ -511,6 +510,21 @@ fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
 
         frontier = new_frontier;
     }
+
+    // If we made it this far, we have a polyforest!
+    Ok(image_graph)
+}
+
+// The main vacuum logic
+fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
+    // Find all current images.
+    let image_infos = list_images(state)?;
+
+    // Find all images in use by containers.
+    let image_ids_in_use = image_ids_in_use()?;
+
+    // Construct a polyforest of image nodes that reflects their parent-child relationships.
+    let image_graph = construct_polyforest(state, &image_infos, &image_ids_in_use)?;
 
     // Sort the images from least recently used to most recently used.
     // Break ties using the number of dependency layers.
@@ -673,4 +687,490 @@ pub fn run(settings: &Settings, state: &mut State) -> io::Result<()> {
         io::ErrorKind::Other,
         format!("{} unexpectedly terminated.", "docker events".code_str()),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{construct_polyforest, ImageInfo, ImageNode};
+    use crate::state::{Image, State};
+    use std::{
+        collections::{HashMap, HashSet},
+        io,
+        time::Duration,
+    };
+
+    #[test]
+    fn construct_polyforest_empty() -> io::Result<()> {
+        let state = State {
+            images: HashMap::new(),
+        };
+
+        let image_infos = vec![];
+        let image_ids_in_use = HashSet::new();
+        let image_graph = construct_polyforest(&state, &image_infos, &image_ids_in_use)?;
+
+        assert_eq!(0, image_graph.len());
+
+        Ok(())
+    }
+
+    #[test]
+    fn construct_polyforest_single_image() -> io::Result<()> {
+        let image_id = "id-0";
+
+        let mut images = HashMap::new();
+        images.insert(
+            image_id.to_owned(),
+            Image {
+                parent_id: None,
+                last_used_since_epoch: Duration::from_secs(42),
+            },
+        );
+
+        let state = State { images };
+
+        let image_info = ImageInfo {
+            id: image_id.to_owned(),
+            parent_id: None,
+            created_since_epoch: Duration::from_secs(100),
+        };
+
+        let image_infos = vec![image_info.clone()];
+        let image_ids_in_use = HashSet::new();
+        let image_graph = construct_polyforest(&state, &image_infos, &image_ids_in_use)?;
+
+        assert_eq!(1, image_graph.len());
+
+        assert_eq!(
+            Some(&ImageNode {
+                image_info,
+                last_used_since_epoch: Duration::from_secs(42),
+                ancestors: 0,
+            }),
+            image_graph.get(image_id)
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn construct_polyforest_single_image_missing_state() -> io::Result<()> {
+        let image_id = "id-0";
+        let images = HashMap::new();
+        let state = State { images };
+
+        let image_info = ImageInfo {
+            id: image_id.to_owned(),
+            parent_id: None,
+            created_since_epoch: Duration::from_secs(100),
+        };
+
+        let image_infos = vec![image_info.clone()];
+        let image_ids_in_use = HashSet::new();
+        let image_graph = construct_polyforest(&state, &image_infos, &image_ids_in_use)?;
+
+        assert_eq!(1, image_graph.len());
+
+        assert_eq!(
+            Some(&ImageNode {
+                image_info,
+                last_used_since_epoch: Duration::from_secs(100),
+                ancestors: 0,
+            }),
+            image_graph.get(image_id)
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn construct_polyforest_parent_child_increasing_timestamps() -> io::Result<()> {
+        let image_id_0 = "id-0";
+        let image_id_1 = "id-1";
+
+        let mut images = HashMap::new();
+        images.insert(
+            image_id_0.to_owned(),
+            Image {
+                parent_id: None,
+                last_used_since_epoch: Duration::from_secs(42),
+            },
+        );
+        images.insert(
+            image_id_1.to_owned(),
+            Image {
+                parent_id: Some(image_id_0.to_owned()),
+                last_used_since_epoch: Duration::from_secs(43),
+            },
+        );
+
+        let state = State { images };
+
+        let image_info_0 = ImageInfo {
+            id: image_id_0.to_owned(),
+            parent_id: None,
+            created_since_epoch: Duration::from_secs(100),
+        };
+
+        let image_info_1 = ImageInfo {
+            id: image_id_1.to_owned(),
+            parent_id: Some(image_id_0.to_owned()),
+            created_since_epoch: Duration::from_secs(101),
+        };
+
+        let image_infos = vec![image_info_0.clone(), image_info_1.clone()];
+        let image_ids_in_use = HashSet::new();
+        let image_graph = construct_polyforest(&state, &image_infos, &image_ids_in_use)?;
+
+        assert_eq!(2, image_graph.len());
+
+        assert_eq!(
+            Some(&ImageNode {
+                image_info: image_info_0,
+                last_used_since_epoch: Duration::from_secs(43),
+                ancestors: 0,
+            }),
+            image_graph.get(image_id_0)
+        );
+
+        assert_eq!(
+            Some(&ImageNode {
+                image_info: image_info_1,
+                last_used_since_epoch: Duration::from_secs(43),
+                ancestors: 1,
+            }),
+            image_graph.get(image_id_1)
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn construct_polyforest_parent_child_decreasing_timestamps() -> io::Result<()> {
+        let image_id_0 = "id-0";
+        let image_id_1 = "id-1";
+
+        let mut images = HashMap::new();
+        images.insert(
+            image_id_0.to_owned(),
+            Image {
+                parent_id: None,
+                last_used_since_epoch: Duration::from_secs(43),
+            },
+        );
+        images.insert(
+            image_id_1.to_owned(),
+            Image {
+                parent_id: Some(image_id_0.to_owned()),
+                last_used_since_epoch: Duration::from_secs(42),
+            },
+        );
+
+        let state = State { images };
+
+        let image_info_0 = ImageInfo {
+            id: image_id_0.to_owned(),
+            parent_id: None,
+            created_since_epoch: Duration::from_secs(100),
+        };
+
+        let image_info_1 = ImageInfo {
+            id: image_id_1.to_owned(),
+            parent_id: Some(image_id_0.to_owned()),
+            created_since_epoch: Duration::from_secs(101),
+        };
+
+        let image_infos = vec![image_info_0.clone(), image_info_1.clone()];
+        let image_ids_in_use = HashSet::new();
+        let image_graph = construct_polyforest(&state, &image_infos, &image_ids_in_use)?;
+
+        assert_eq!(2, image_graph.len());
+
+        assert_eq!(
+            Some(&ImageNode {
+                image_info: image_info_0,
+                last_used_since_epoch: Duration::from_secs(43),
+                ancestors: 0,
+            }),
+            image_graph.get(image_id_0)
+        );
+
+        assert_eq!(
+            Some(&ImageNode {
+                image_info: image_info_1,
+                last_used_since_epoch: Duration::from_secs(42),
+                ancestors: 1,
+            }),
+            image_graph.get(image_id_1)
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn construct_polyforest_grandparent_parent_child_increasing_timestamps() -> io::Result<()> {
+        let image_id_0 = "id-0";
+        let image_id_1 = "id-1";
+        let image_id_2 = "id-2";
+
+        let mut images = HashMap::new();
+        images.insert(
+            image_id_0.to_owned(),
+            Image {
+                parent_id: None,
+                last_used_since_epoch: Duration::from_secs(42),
+            },
+        );
+        images.insert(
+            image_id_1.to_owned(),
+            Image {
+                parent_id: Some(image_id_0.to_owned()),
+                last_used_since_epoch: Duration::from_secs(43),
+            },
+        );
+        images.insert(
+            image_id_2.to_owned(),
+            Image {
+                parent_id: Some(image_id_1.to_owned()),
+                last_used_since_epoch: Duration::from_secs(44),
+            },
+        );
+
+        let state = State { images };
+
+        let image_info_0 = ImageInfo {
+            id: image_id_0.to_owned(),
+            parent_id: None,
+            created_since_epoch: Duration::from_secs(100),
+        };
+
+        let image_info_1 = ImageInfo {
+            id: image_id_1.to_owned(),
+            parent_id: Some(image_id_0.to_owned()),
+            created_since_epoch: Duration::from_secs(101),
+        };
+
+        let image_info_2 = ImageInfo {
+            id: image_id_2.to_owned(),
+            parent_id: Some(image_id_1.to_owned()),
+            created_since_epoch: Duration::from_secs(102),
+        };
+
+        let image_infos = vec![
+            image_info_0.clone(),
+            image_info_1.clone(),
+            image_info_2.clone(),
+        ];
+        let image_ids_in_use = HashSet::new();
+        let image_graph = construct_polyforest(&state, &image_infos, &image_ids_in_use)?;
+
+        assert_eq!(3, image_graph.len());
+
+        assert_eq!(
+            Some(&ImageNode {
+                image_info: image_info_0,
+                last_used_since_epoch: Duration::from_secs(44),
+                ancestors: 0,
+            }),
+            image_graph.get(image_id_0)
+        );
+
+        assert_eq!(
+            Some(&ImageNode {
+                image_info: image_info_1,
+                last_used_since_epoch: Duration::from_secs(44),
+                ancestors: 1,
+            }),
+            image_graph.get(image_id_1)
+        );
+
+        assert_eq!(
+            Some(&ImageNode {
+                image_info: image_info_2,
+                last_used_since_epoch: Duration::from_secs(44),
+                ancestors: 2,
+            }),
+            image_graph.get(image_id_2)
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn construct_polyforest_grandparent_parent_child_decreasing_timestamps() -> io::Result<()> {
+        let image_id_0 = "id-0";
+        let image_id_1 = "id-1";
+        let image_id_2 = "id-2";
+
+        let mut images = HashMap::new();
+        images.insert(
+            image_id_0.to_owned(),
+            Image {
+                parent_id: None,
+                last_used_since_epoch: Duration::from_secs(44),
+            },
+        );
+        images.insert(
+            image_id_1.to_owned(),
+            Image {
+                parent_id: Some(image_id_0.to_owned()),
+                last_used_since_epoch: Duration::from_secs(43),
+            },
+        );
+        images.insert(
+            image_id_2.to_owned(),
+            Image {
+                parent_id: Some(image_id_1.to_owned()),
+                last_used_since_epoch: Duration::from_secs(42),
+            },
+        );
+
+        let state = State { images };
+
+        let image_info_0 = ImageInfo {
+            id: image_id_0.to_owned(),
+            parent_id: None,
+            created_since_epoch: Duration::from_secs(100),
+        };
+
+        let image_info_1 = ImageInfo {
+            id: image_id_1.to_owned(),
+            parent_id: Some(image_id_0.to_owned()),
+            created_since_epoch: Duration::from_secs(101),
+        };
+
+        let image_info_2 = ImageInfo {
+            id: image_id_2.to_owned(),
+            parent_id: Some(image_id_1.to_owned()),
+            created_since_epoch: Duration::from_secs(102),
+        };
+
+        let image_infos = vec![
+            image_info_0.clone(),
+            image_info_1.clone(),
+            image_info_2.clone(),
+        ];
+        let image_ids_in_use = HashSet::new();
+        let image_graph = construct_polyforest(&state, &image_infos, &image_ids_in_use)?;
+
+        assert_eq!(3, image_graph.len());
+
+        assert_eq!(
+            Some(&ImageNode {
+                image_info: image_info_0,
+                last_used_since_epoch: Duration::from_secs(44),
+                ancestors: 0,
+            }),
+            image_graph.get(image_id_0)
+        );
+
+        assert_eq!(
+            Some(&ImageNode {
+                image_info: image_info_1,
+                last_used_since_epoch: Duration::from_secs(43),
+                ancestors: 1,
+            }),
+            image_graph.get(image_id_1)
+        );
+
+        assert_eq!(
+            Some(&ImageNode {
+                image_info: image_info_2,
+                last_used_since_epoch: Duration::from_secs(42),
+                ancestors: 2,
+            }),
+            image_graph.get(image_id_2)
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn construct_polyforest_multiple_children() -> io::Result<()> {
+        let image_id_0 = "id-0";
+        let image_id_1 = "id-1";
+        let image_id_2 = "id-2";
+
+        let mut images = HashMap::new();
+        images.insert(
+            image_id_0.to_owned(),
+            Image {
+                parent_id: None,
+                last_used_since_epoch: Duration::from_secs(43),
+            },
+        );
+        images.insert(
+            image_id_1.to_owned(),
+            Image {
+                parent_id: Some(image_id_0.to_owned()),
+                last_used_since_epoch: Duration::from_secs(42),
+            },
+        );
+        images.insert(
+            image_id_2.to_owned(),
+            Image {
+                parent_id: Some(image_id_0.to_owned()),
+                last_used_since_epoch: Duration::from_secs(44),
+            },
+        );
+
+        let state = State { images };
+
+        let image_info_0 = ImageInfo {
+            id: image_id_0.to_owned(),
+            parent_id: None,
+            created_since_epoch: Duration::from_secs(100),
+        };
+
+        let image_info_1 = ImageInfo {
+            id: image_id_1.to_owned(),
+            parent_id: Some(image_id_0.to_owned()),
+            created_since_epoch: Duration::from_secs(101),
+        };
+
+        let image_info_2 = ImageInfo {
+            id: image_id_2.to_owned(),
+            parent_id: Some(image_id_0.to_owned()),
+            created_since_epoch: Duration::from_secs(102),
+        };
+
+        let image_infos = vec![
+            image_info_0.clone(),
+            image_info_1.clone(),
+            image_info_2.clone(),
+        ];
+        let image_ids_in_use = HashSet::new();
+        let image_graph = construct_polyforest(&state, &image_infos, &image_ids_in_use)?;
+
+        assert_eq!(3, image_graph.len());
+
+        assert_eq!(
+            Some(&ImageNode {
+                image_info: image_info_0,
+                last_used_since_epoch: Duration::from_secs(44),
+                ancestors: 0,
+            }),
+            image_graph.get(image_id_0)
+        );
+
+        assert_eq!(
+            Some(&ImageNode {
+                image_info: image_info_1,
+                last_used_since_epoch: Duration::from_secs(42),
+                ancestors: 1,
+            }),
+            image_graph.get(image_id_1)
+        );
+
+        assert_eq!(
+            Some(&ImageNode {
+                image_info: image_info_2,
+                last_used_since_epoch: Duration::from_secs(44),
+                ancestors: 1,
+            }),
+            image_graph.get(image_id_2)
+        );
+
+        Ok(())
+    }
 }
