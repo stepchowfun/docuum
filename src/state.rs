@@ -83,10 +83,10 @@ pub fn save(state: &State) -> io::Result<()> {
         let payload = serde_yaml::to_string(state).unwrap();
 
         // Create the ancestor directories, if needed.
-        create_dir_all(parent)?;
+        create_dir_all(parent.clone())?;
 
         // Persist the state to disk.
-        let mut temp_file = NamedTempFile::new()?;
+        let mut temp_file = NamedTempFile::new_in(parent)?;
         temp_file.write_all(payload.as_bytes())?;
         temp_file.flush()?;
         temp_file.persist(path)?;
