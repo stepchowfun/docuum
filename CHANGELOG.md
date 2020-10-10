@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] - 2020-10-09
+
+### Changed
+- Docuum now persists its state atomically. This is to avoid the possibility of having the state only partially written due to abnormal termination, such as from a power failure.
+
 ## [0.14.0] - 2020-10-08
 
 ### Changed

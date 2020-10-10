@@ -2,11 +2,12 @@ use crate::format::CodeStr;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    fs::{create_dir_all, read_to_string, write},
-    io,
+    fs::{create_dir_all, read_to_string},
+    io::{self, Write},
     path::PathBuf,
     time::Duration,
 };
+use tempfile::NamedTempFile;
 
 // What we want to remember about an individual image
 #[derive(Deserialize, Serialize)]
@@ -69,7 +70,7 @@ pub fn load() -> io::Result<State> {
 pub fn save(state: &State) -> io::Result<()> {
     // Check if we have a path.
     if let Some(path) = path() {
-        // Log what we are trying to do in case an error occurs.
+        // Log what we're trying to do in case an error occurs.
         debug!(
             "Persisting the state to {}\u{2026}",
             path.to_string_lossy().code_str(),
@@ -84,8 +85,11 @@ pub fn save(state: &State) -> io::Result<()> {
         // Create the ancestor directories, if needed.
         create_dir_all(parent)?;
 
-        // Write to the file.
-        write(path, payload.as_bytes())?;
+        // Persist the state to disk.
+        let mut temp_file = NamedTempFile::new()?;
+        temp_file.write_all(payload.as_bytes())?;
+        temp_file.flush()?;
+        temp_file.persist(path)?;
     } else {
         // Fail if we don't have a path.
         return Err(io::Error::new(
