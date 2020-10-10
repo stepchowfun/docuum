@@ -6,7 +6,7 @@
 
 Docker's built-in `docker image prune --all --filter until=…` command serves a similar purpose. However, the built-in solution isn't ideal since it uses the image creation time, rather than the last usage time, to determine which images to remove. That means it can delete frequently used images, and these may take a long time to build.
 
-Docuum is ideal for use cases such as continuous integration workers, development environments, or any other situation in which Docker images accumulate on disk over time. Docuum works well with tools like [Toast](https://github.com/stepchowfun/toast) and [Docker Compose](https://docs.docker.com/compose/).
+Docuum is ideal for use cases such as continuous integration workers, developer workstations, or any other environment in which Docker images accumulate on disk over time. Docuum works well with tools like [Toast](https://github.com/stepchowfun/toast) and [Docker Compose](https://docs.docker.com/compose/).
 
 Docuum is used by Airbnb on its fleet of 1.5k+ CI workers.
 
@@ -14,10 +14,13 @@ Docuum is used by Airbnb on its fleet of 1.5k+ CI workers.
 
 [Docker doesn't record when an image was last used.](https://github.com/moby/moby/issues/4237) To work around this, Docuum listens for notifications via `docker events` to learn when images are used. It maintains a small piece of state in a local data directory (see [this](https://docs.rs/dirs/2.0.2/dirs/fn.data_local_dir.html) for details about where this directory is on various platforms). That persisted state allows you to freely restart Docuum (or the whole machine) without losing the image usage timestamp data.
 
-When Docuum first starts and subsequently whenever a new Docker event comes in, LRU eviction is performed until the total disk usage due to Docker images is below the given threshold. This design has two advantages over [time to live](https://en.wikipedia.org/wiki/Time_to_live) (TTL) schemes:
+When Docuum first starts and subsequently whenever a new Docker event comes in, LRU eviction is performed until the total disk usage due to Docker images is below the given threshold. This design has a few advantages over evicting images based on a fixed [time to live](https://en.wikipedia.org/wiki/Time_to_live) (TTL), which is what various other tools in the Docker ecosystem do:
 
 1. There is no need to configure and tune an interval to run on. Docuum evicts images immediately whenever the disk usage exceeds the threshold without waiting for any timers.
 2. Docuum uses no CPU resources when there is no Docker activity. You can run it on your laptop without worrying about draining your battery.
+3. In order to prevent your disk from filling up, it's more straightforward to set a threshold based on disk usage rather than guessing an appropriate maximum image age.
+
+Docuum also respects the parent-child relationships between images. In particular, it will delete children of a parent before deleting the parent (even if the children were used more recently than the parent), because Docker doesn't allow images with children to be deleted.
 
 ## Usage
 
