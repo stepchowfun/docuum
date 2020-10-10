@@ -93,7 +93,7 @@ fn image_id(image: &str) -> io::Result<String> {
 
 // Ask Docker for the ID of the parent of an image.
 fn parent_id(image_id: &str) -> io::Result<Option<String>> {
-    // Query Docker for the image ID.
+    // Query Docker for the parent image ID.
     let output = Command::new("docker")
         .args(&["image", "inspect", "--format", "{{.Parent}}", image_id])
         .stderr(Stdio::inherit())
