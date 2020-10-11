@@ -147,3 +147,19 @@ tasks:
       mkdir artifacts
       sha256sum --binary target/release/docuum
       cp target/release/docuum artifacts/docuum-x86_64-unknown-linux-gnu
+
+  release-musl:
+    dependencies:
+      - fetch_crates
+    input_paths:
+      - src
+    output_paths:
+      - artifacts
+    user: user
+    command: |
+      set -euo pipefail
+      . $HOME/.cargo/env
+      rustup target add x86_64-unknown-linux-musl
+      cargo build --release --target x86_64-unknown-linux-musl
+      mkdir artifacts
+      cp target/x86_64-unknown-linux-musl/release/docuum artifacts/docuum-x86_64-unknown-linux-musl
