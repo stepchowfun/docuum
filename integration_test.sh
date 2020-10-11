@@ -3,6 +3,19 @@ set -Eemo pipefail
 # This script is meant to be run inside https://hub.docker.com/_/docker
 # See .github/workflows/ci.yml:18 for how to run this yourself
 
+# Wait for the docker daemon to start up
+for i in {1..30}; do
+    if docker ps; then
+        break
+    else
+        sleep 1
+    fi
+done
+if [ "$i" = '30' ]; then
+    echo "Docker did not start within 30 seconds, aborting"
+    exit 1
+fi
+
 # Start docuum in the background
 /artifacts/docuum-x86_64-unknown-linux-musl --threshold=13MB &
 sleep 1
@@ -15,10 +28,10 @@ function wait {
             break
         fi
         echo "Waiting for docuum to finish one loop..."
-        sleep 2
+        sleep 1
     done
     if [ "$i" = '60' ]; then
-        echo "Docuum did not finish a loop within 2 minutes, aborting"
+        echo "Docuum did not finish a loop within 1 minute, aborting"
         exit 1
     fi
 }
