@@ -643,28 +643,28 @@ pub fn run(settings: &Settings, state: &mut State) -> io::Result<()> {
         };
 
         // Get the ID of the image.
-        let image_id = image_id(
-            &if event.r#type == "container" && event.action == "destroy" {
-                if let Some(image_name) = event.actor.attributes.image {
-                    image_name
-                } else {
-                    debug!("Invalid Docker event.");
-                    continue;
-                }
-            } else if event.r#type == "image"
-                && (event.action == "import"
-                    || event.action == "load"
-                    || event.action == "pull"
-                    || event.action == "push"
-                    || event.action == "save"
-                    || event.action == "tag")
-            {
-                event.id
+        let image_id = image_id(&if event.r#type == "container"
+            && (event.action == "create" || event.action == "destroy")
+        {
+            if let Some(image_name) = event.actor.attributes.image {
+                image_name
             } else {
-                debug!("Skipping due to irrelevance.");
+                debug!("Invalid Docker event.");
                 continue;
-            },
-        )?;
+            }
+        } else if event.r#type == "image"
+            && (event.action == "import"
+                || event.action == "load"
+                || event.action == "pull"
+                || event.action == "push"
+                || event.action == "save"
+                || event.action == "tag")
+        {
+            event.id
+        } else {
+            debug!("Skipping due to irrelevance.");
+            continue;
+        })?;
 
         // Inform the user that we're about to vacuum.
         info!("Waking up\u{2026}");
