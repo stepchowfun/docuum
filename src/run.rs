@@ -414,11 +414,12 @@ fn construct_polyforest(
 
             // The image is a root because either it has no parent or the parent doesn't exist.
             // Compute the last used date.
-            let last_used_since_epoch = if let Some(image) = state.images.get(&image_info.id) {
-                image.last_used_since_epoch
-            } else {
-                image_info.created_since_epoch
-            };
+            let last_used_since_epoch = state
+                .images
+                .get(&image_info.id)
+                .map_or(image_info.created_since_epoch, |image| {
+                    image.last_used_since_epoch
+                });
 
             // Add the image to the polyforest and break.
             image_graph.insert(
@@ -446,11 +447,12 @@ fn construct_polyforest(
                 .clone();
 
             // Compute the last used date.
-            let mut last_used_since_epoch = if let Some(image) = state.images.get(&image_info.id) {
-                image.last_used_since_epoch
-            } else {
-                image_info.created_since_epoch
-            };
+            let mut last_used_since_epoch = state
+                .images
+                .get(&image_info.id)
+                .map_or(image_info.created_since_epoch, |image| {
+                    image.last_used_since_epoch
+                });
 
             // If the image is in use by a container, update its timestamp.
             if image_ids_in_use.contains(&image_info.id) {
