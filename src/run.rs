@@ -105,7 +105,7 @@ fn parent_id(image_id: &str) -> io::Result<Option<String>> {
             io::ErrorKind::Other,
             format!(
                 "Unable to determine ID of the parent of image {}.",
-                image_id.code_str()
+                image_id.code_str(),
             ),
         ));
     }
@@ -749,7 +749,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(42),
                 ancestors: 0,
             }),
-            image_graph.get(image_id)
+            image_graph.get(image_id),
         );
 
         Ok(())
@@ -779,7 +779,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(100),
                 ancestors: 0,
             }),
-            image_graph.get(image_id)
+            image_graph.get(image_id),
         );
 
         Ok(())
@@ -832,7 +832,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(43),
                 ancestors: 0,
             }),
-            image_graph.get(image_id_0)
+            image_graph.get(image_id_0),
         );
 
         assert_eq!(
@@ -841,7 +841,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(43),
                 ancestors: 1,
             }),
-            image_graph.get(image_id_1)
+            image_graph.get(image_id_1),
         );
 
         Ok(())
@@ -894,7 +894,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(43),
                 ancestors: 0,
             }),
-            image_graph.get(image_id_0)
+            image_graph.get(image_id_0),
         );
 
         assert_eq!(
@@ -903,7 +903,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(42),
                 ancestors: 1,
             }),
-            image_graph.get(image_id_1)
+            image_graph.get(image_id_1),
         );
 
         Ok(())
@@ -974,7 +974,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(44),
                 ancestors: 0,
             }),
-            image_graph.get(image_id_0)
+            image_graph.get(image_id_0),
         );
 
         assert_eq!(
@@ -983,7 +983,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(44),
                 ancestors: 1,
             }),
-            image_graph.get(image_id_1)
+            image_graph.get(image_id_1),
         );
 
         assert_eq!(
@@ -992,7 +992,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(44),
                 ancestors: 2,
             }),
-            image_graph.get(image_id_2)
+            image_graph.get(image_id_2),
         );
 
         Ok(())
@@ -1063,7 +1063,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(44),
                 ancestors: 0,
             }),
-            image_graph.get(image_id_0)
+            image_graph.get(image_id_0),
         );
 
         assert_eq!(
@@ -1072,7 +1072,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(43),
                 ancestors: 1,
             }),
-            image_graph.get(image_id_1)
+            image_graph.get(image_id_1),
         );
 
         assert_eq!(
@@ -1081,7 +1081,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(42),
                 ancestors: 2,
             }),
-            image_graph.get(image_id_2)
+            image_graph.get(image_id_2),
         );
 
         Ok(())
@@ -1152,7 +1152,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(44),
                 ancestors: 0,
             }),
-            image_graph.get(image_id_0)
+            image_graph.get(image_id_0),
         );
 
         assert_eq!(
@@ -1161,7 +1161,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(42),
                 ancestors: 1,
             }),
-            image_graph.get(image_id_1)
+            image_graph.get(image_id_1),
         );
 
         assert_eq!(
@@ -1170,7 +1170,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(44),
                 ancestors: 1,
             }),
-            image_graph.get(image_id_2)
+            image_graph.get(image_id_2),
         );
 
         Ok(())
