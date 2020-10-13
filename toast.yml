@@ -1,13 +1,15 @@
-image: ubuntu:18.04
+image: ubuntu:19.10
 default: check
 tasks:
   install_packages:
+    description: Install system packages.
     command: |
       set -euo pipefail
       apt-get update
-      apt-get install --yes build-essential curl shellcheck
+      apt-get install --yes build-essential curl ripgrep shellcheck
 
   install_tagref:
+    description: Install Tagref, a reference checking tool.
     dependencies:
       - install_packages
     command: |
@@ -15,11 +17,13 @@ tasks:
       curl https://raw.githubusercontent.com/stepchowfun/tagref/master/install.sh -LSfs | sh
 
   create_user:
+    description: Create a user who doesn't have root privileges.
     command: |
       set -euo pipefail
       adduser --disabled-password --gecos '' user
 
   install_rust:
+    description: Install Rust, a systems programming language.
     dependencies:
       - install_packages
       - create_user
@@ -34,11 +38,13 @@ tasks:
       rm -rf "$(dirname "$(rustup which rustc)")/../share"
 
   install_tools:
+    description: Install the tools needed to build and lint the program.
     dependencies:
       - install_rust
       - install_tagref
 
   fetch_crates:
+    description: Download and build Rust packages used by the program.
     dependencies:
       - install_tools
     input_paths:
@@ -61,6 +67,7 @@ tasks:
       rm -rf src
 
   build:
+    description: Build the binary in non-release mode.
     dependencies:
       - fetch_crates
     input_paths:
@@ -72,6 +79,7 @@ tasks:
       cargo build
 
   test:
+    description: Run the test suite.
     dependencies:
       - build
     user: user
@@ -81,6 +89,7 @@ tasks:
       cargo test
 
   lint:
+    description: Run the linters.
     dependencies:
       - build
     input_paths:
@@ -91,14 +100,41 @@ tasks:
     command: |
       set -euo pipefail
       . $HOME/.cargo/env
+
+      # Lint Rust files.
       cargo clippy --all-targets --all-features -- \
         --deny warnings --deny clippy::all --deny clippy::pedantic
+
+      # Check code formatting.
       cargo fmt --all -- --check || echo 'ERROR: Please correct the formatting errors above.' 1>&2
+
+      # Check references.
       tagref
-      shellcheck install.sh
-      shellcheck release.sh
+
+      # Lint shell files.
+      shellcheck install.sh release.sh
+
+      # Enforce that lines span no more than 100 columns.
+      if rg --line-number --type rust '.{101}'; then
+        echo "There are lines spanning more than 100 columns." >&2
+        exit 1
+      fi
+
+      # Enforce trailing commas in multi-line sequences.
+      if rg --line-number --multiline --type rust '[^,]\n(\s*)\)'; then
+        echo "There are multi-line sequences without trailing commas." >&2
+        exit 1
+      fi
+
+      # Forbid trailing commas in single-line sequences.
+      if rg --line-number --type rust '[^(],\s*\)'; then
+        echo "There are single-line sequences with trailing commas." >&2
+        exit 1
+      fi
+
 
   run:
+    description: Run the program.
     dependencies:
       - build
     user: user
@@ -108,6 +144,7 @@ tasks:
       cargo run -- --help
 
   check:
+    description: Type-check the program.
     dependencies:
       - fetch_crates
     input_paths:
@@ -120,6 +157,7 @@ tasks:
       cargo check
 
   format:
+    description: Format the source code.
     dependencies:
       - fetch_crates
     input_paths:
@@ -133,6 +171,8 @@ tasks:
       cargo fmt --all
 
   release:
+    description: >-
+      Build the program in release mode and export the binary to the `artifacts` directory.
     dependencies:
       - fetch_crates
     input_paths:
