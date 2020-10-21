@@ -14,7 +14,7 @@
   DESTINATION="${PREFIX:-/usr/local/bin}/docuum"
 
   # Which version to download
-  RELEASE="v${VERSION:-0.15.1}"
+  RELEASE="v${VERSION:-0.16.0}"
 
   # Determine which binary to download.
   FILENAME=''
@@ -59,8 +59,8 @@
 
   # Install it at the requested destination.
   # shellcheck disable=SC2024
-  mv "$FILENAME" "$DESTINATION" 2> /dev/null ||
-    sudo mv "$FILENAME" "$DESTINATION" < /dev/tty ||
+  mv -f "$FILENAME" "$DESTINATION" 2> /dev/null ||
+    sudo mv -f "$FILENAME" "$DESTINATION" < /dev/tty ||
     fail "Unable to install the binary at $DESTINATION."
 
   # Remove the temporary directory.

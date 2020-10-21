@@ -2,6 +2,7 @@ name: Continuous integration
 on: [push, pull_request]
 jobs:
   ci:
+    name: Build and test on Linux
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
@@ -12,7 +13,7 @@ jobs:
       if: github.event_name == 'push'
     - uses: stepchowfun/toast/.github/actions/toast@master
       with:
-        tasks: build test lint run release-musl
+        tasks: build check test lint run release-musl
         repo: stephanmisc/toast
         write_remote_cache: ${{ github.event_name == 'push' }}
     - name: Integration Test

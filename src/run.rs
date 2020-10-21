@@ -105,7 +105,7 @@ fn parent_id(image_id: &str) -> io::Result<Option<String>> {
             io::ErrorKind::Other,
             format!(
                 "Unable to determine ID of the parent of image {}.",
-                image_id.code_str()
+                image_id.code_str(),
             ),
         ));
     }
@@ -414,11 +414,12 @@ fn construct_polyforest(
 
             // The image is a root because either it has no parent or the parent doesn't exist.
             // Compute the last used date.
-            let last_used_since_epoch = if let Some(image) = state.images.get(&image_info.id) {
-                image.last_used_since_epoch
-            } else {
-                image_info.created_since_epoch
-            };
+            let last_used_since_epoch = state
+                .images
+                .get(&image_info.id)
+                .map_or(image_info.created_since_epoch, |image| {
+                    image.last_used_since_epoch
+                });
 
             // Add the image to the polyforest and break.
             image_graph.insert(
@@ -446,11 +447,12 @@ fn construct_polyforest(
                 .clone();
 
             // Compute the last used date.
-            let mut last_used_since_epoch = if let Some(image) = state.images.get(&image_info.id) {
-                image.last_used_since_epoch
-            } else {
-                image_info.created_since_epoch
-            };
+            let mut last_used_since_epoch = state
+                .images
+                .get(&image_info.id)
+                .map_or(image_info.created_since_epoch, |image| {
+                    image.last_used_since_epoch
+                });
 
             // If the image is in use by a container, update its timestamp.
             if image_ids_in_use.contains(&image_info.id) {
@@ -643,28 +645,28 @@ pub fn run(settings: &Settings, state: &mut State) -> io::Result<()> {
         };
 
         // Get the ID of the image.
-        let image_id = image_id(
-            &if event.r#type == "container" && event.action == "destroy" {
-                if let Some(image_name) = event.actor.attributes.image {
-                    image_name
-                } else {
-                    debug!("Invalid Docker event.");
-                    continue;
-                }
-            } else if event.r#type == "image"
-                && (event.action == "import"
-                    || event.action == "load"
-                    || event.action == "pull"
-                    || event.action == "push"
-                    || event.action == "save"
-                    || event.action == "tag")
-            {
-                event.id
+        let image_id = image_id(&if event.r#type == "container"
+            && (event.action == "create" || event.action == "destroy")
+        {
+            if let Some(image_name) = event.actor.attributes.image {
+                image_name
             } else {
-                debug!("Skipping due to irrelevance.");
+                debug!("Invalid Docker event.");
                 continue;
-            },
-        )?;
+            }
+        } else if event.r#type == "image"
+            && (event.action == "import"
+                || event.action == "load"
+                || event.action == "pull"
+                || event.action == "push"
+                || event.action == "save"
+                || event.action == "tag")
+        {
+            event.id
+        } else {
+            debug!("Skipping due to irrelevance.");
+            continue;
+        })?;
 
         // Inform the user that we're about to vacuum.
         info!("Waking up\u{2026}");
@@ -747,7 +749,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(42),
                 ancestors: 0,
             }),
-            image_graph.get(image_id)
+            image_graph.get(image_id),
         );
 
         Ok(())
@@ -777,7 +779,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(100),
                 ancestors: 0,
             }),
-            image_graph.get(image_id)
+            image_graph.get(image_id),
         );
 
         Ok(())
@@ -830,7 +832,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(43),
                 ancestors: 0,
             }),
-            image_graph.get(image_id_0)
+            image_graph.get(image_id_0),
         );
 
         assert_eq!(
@@ -839,7 +841,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(43),
                 ancestors: 1,
             }),
-            image_graph.get(image_id_1)
+            image_graph.get(image_id_1),
         );
 
         Ok(())
@@ -892,7 +894,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(43),
                 ancestors: 0,
             }),
-            image_graph.get(image_id_0)
+            image_graph.get(image_id_0),
         );
 
         assert_eq!(
@@ -901,7 +903,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(42),
                 ancestors: 1,
             }),
-            image_graph.get(image_id_1)
+            image_graph.get(image_id_1),
         );
 
         Ok(())
@@ -972,7 +974,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(44),
                 ancestors: 0,
             }),
-            image_graph.get(image_id_0)
+            image_graph.get(image_id_0),
         );
 
         assert_eq!(
@@ -981,7 +983,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(44),
                 ancestors: 1,
             }),
-            image_graph.get(image_id_1)
+            image_graph.get(image_id_1),
         );
 
         assert_eq!(
@@ -990,7 +992,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(44),
                 ancestors: 2,
             }),
-            image_graph.get(image_id_2)
+            image_graph.get(image_id_2),
         );
 
         Ok(())
@@ -1061,7 +1063,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(44),
                 ancestors: 0,
             }),
-            image_graph.get(image_id_0)
+            image_graph.get(image_id_0),
         );
 
         assert_eq!(
@@ -1070,7 +1072,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(43),
                 ancestors: 1,
             }),
-            image_graph.get(image_id_1)
+            image_graph.get(image_id_1),
         );
 
         assert_eq!(
@@ -1079,7 +1081,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(42),
                 ancestors: 2,
             }),
-            image_graph.get(image_id_2)
+            image_graph.get(image_id_2),
         );
 
         Ok(())
@@ -1150,7 +1152,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(44),
                 ancestors: 0,
             }),
-            image_graph.get(image_id_0)
+            image_graph.get(image_id_0),
         );
 
         assert_eq!(
@@ -1159,7 +1161,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(42),
                 ancestors: 1,
             }),
-            image_graph.get(image_id_1)
+            image_graph.get(image_id_1),
         );
 
         assert_eq!(
@@ -1168,7 +1170,7 @@ mod tests {
                 last_used_since_epoch: Duration::from_secs(44),
                 ancestors: 1,
             }),
-            image_graph.get(image_id_2)
+            image_graph.get(image_id_2),
         );
 
         Ok(())

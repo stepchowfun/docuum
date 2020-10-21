@@ -70,9 +70,9 @@ fn set_up_logging() {
                 style.value(format!(
                     "[{} {}]",
                     Local::now().format("%Y-%m-%d %H:%M:%S %:z").to_string(),
-                    record.level()
+                    record.level(),
                 )),
-                record.args().to_string()
+                record.args().to_string(),
             )
         })
         .init();
@@ -96,7 +96,7 @@ fn settings() -> io::Result<Settings> {
                 .value_name("THRESHOLD")
                 .help(&format!(
                     "Sets the maximum amount of space to be used for Docker images (default: {})",
-                    DEFAULT_THRESHOLD.code_str()
+                    DEFAULT_THRESHOLD.code_str(),
                 ))
                 .takes_value(true),
         )
@@ -141,7 +141,7 @@ fn main() {
         // We couldn't load any state from disk. Log the error.
         debug!(
             "Unable to load state from disk. Proceeding with initial state. Details: {}",
-            error.to_string().code_str()
+            error.to_string().code_str(),
         );
 
         // Start with the initial state.
