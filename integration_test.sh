@@ -3,7 +3,7 @@ set -Eemuo pipefail
 # This script is meant to be run inside https://hub.docker.com/_/docker
 # See [ref:integration_test_step] for how to run this yourself.
 
-# Wait for the docker daemon to start up
+# Wait for the Docker daemon to start up.
 for i in {1..30}; do
     if docker ps; then
         break
