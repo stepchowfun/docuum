@@ -188,7 +188,10 @@ tasks:
       sha256sum --binary target/release/docuum
       cp target/release/docuum artifacts/docuum-x86_64-unknown-linux-gnu
 
-  release-musl:
+  release_musl:
+    description: >-
+      Build the program in release mode (with musl instead of glibc) and export the binary to the
+      `artifacts` directory.
     dependencies:
       - fetch_crates
     input_paths:
