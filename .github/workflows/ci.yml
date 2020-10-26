@@ -13,6 +13,15 @@ jobs:
       if: github.event_name == 'push'
     - uses: stepchowfun/toast/.github/actions/toast@master
       with:
-        tasks: build check test lint run
+        tasks: build check test lint run release-musl
         repo: stephanmisc/toast
         write_remote_cache: ${{ github.event_name == 'push' }}
+    # [tag:integration_test_step]
+    - name: Integration Test
+      run: |
+        docker run --privileged --name dind -d \
+          -v "$PWD/artifacts:/artifacts" docker:dind
+        docker exec dind apk add bash
+        docker cp integration_test.sh dind:/
+        docker exec -i dind ./integration_test.sh
+        docker rm -f dind
