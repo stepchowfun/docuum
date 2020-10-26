@@ -16,9 +16,11 @@ DOCUUM_PID="$!"
 
 # This function waits for Docuum to start sleeping by checking the process state. The process could
 # be sleeping for many reasons, so this function may return prematurely. In that case, the
-# integration test will fail flakily.
+# integration test will fail flakily. To make that outcome less likely, we sleep for 10 seconds
+# before checking the process state.
 wait_for_docuum() {
   echo 'Waiting for Docuum to sleep…'
+  sleep 10
   while [[ "$(awk '{ print $3 }' /proc/$DOCUUM_PID/stat)" != 'S' ]]; do
     sleep 1
   done
