@@ -1,4 +1,4 @@
-# Keep this file in sync with `.gitignore`.
-artifacts/
-release/
-target/
+# Keep this file in sync with `.dockerignore` and `.gitignore`.
+/artifacts/
+/release/
+/target/
