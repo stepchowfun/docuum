@@ -1,2 +1,4 @@
-artifacts/
-target/
+# Keep this file in sync with `.gitignore` and `.ignore`, but don't ignore
+# `/release/`.
+/artifacts/
+/target/
