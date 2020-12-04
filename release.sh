@@ -9,7 +9,8 @@ set -euo pipefail
 # 1. Bump the version in `Cargo.toml`, run `cargo build` to update `Cargo.lock`, and update
 #    `CHANGELOG.md` with information about the new version. Ship those changes as a single pull
 #    request.
-# 2. Run this script and upload the files in the `release` directory to GitHub as release artifacts.
+# 2. Run this script on an x86-64 machine and upload the files in the `release` directory to GitHub
+#    as release artifacts.
 # 3. Build and upload the Docker image:
 #      docker build --tag stephanmisc/docuum:latest --tag stephanmisc/docuum:X.Y.Z .
 #      docker push stephanmisc/docuum:latest
@@ -23,7 +24,7 @@ set -euo pipefail
   rm -rf target/release
   cargo build --release
 
-  # x86-64 GNU/Linux build
+  # x86-64 GNU/Linux builds
   rm -rf artifacts
   toast release
 
@@ -32,17 +33,20 @@ set -euo pipefail
   mkdir release
 
   # Copy the artifacts into the `release` directory.
-  cp artifacts/docuum-x86_64-unknown-linux-gnu release/docuum-x86_64-unknown-linux-gnu
   cp target/release/docuum release/docuum-x86_64-apple-darwin
+  cp artifacts/docuum-x86_64-unknown-linux-gnu release/docuum-x86_64-unknown-linux-gnu
+  cp artifacts/docuum-x86_64-unknown-linux-musl release/docuum-x86_64-unknown-linux-musl
 
   # Compute checksums of the artifacts.
   cd release
   shasum --algorithm 256 --binary docuum-x86_64-apple-darwin > docuum-x86_64-apple-darwin.sha256
   shasum --algorithm 256 --binary docuum-x86_64-unknown-linux-gnu > docuum-x86_64-unknown-linux-gnu.sha256
+  shasum --algorithm 256 --binary docuum-x86_64-unknown-linux-musl > docuum-x86_64-unknown-linux-musl.sha256
 
   # Verify the checksums.
   shasum --algorithm 256 --check --status docuum-x86_64-apple-darwin.sha256
   shasum --algorithm 256 --check --status docuum-x86_64-unknown-linux-gnu.sha256
+  shasum --algorithm 256 --check --status docuum-x86_64-unknown-linux-musl.sha256
 
   # Publish to crates.io.
   cargo publish
