@@ -261,6 +261,7 @@ fn image_ids_in_use() -> io::Result<HashSet<String>> {
 }
 
 // Get the total space used by Docker images.
+#[allow(clippy::map_err_ignore)]
 fn space_usage() -> io::Result<Byte> {
     // Query Docker for the space usage.
     let output = Command::new("docker")
