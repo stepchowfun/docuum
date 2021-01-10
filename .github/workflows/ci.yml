@@ -1,6 +1,47 @@
 name: Continuous integration
 on: [push, pull_request]
 jobs:
+  ci-windows:
+    name: Build and test on Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+      - name: test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+      - name: run
+        uses: actions-rs/cargo@v1
+        with:
+          command: run
+          args: -- --help
+      - name: release
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release
+      # lint already runs on Linux and check is not needed as already happens while building
+      - run: |
+          WINDOWS=true ./integration_test.sh
+        shell: bash
+
   ci:
     name: Build and test on Linux
     runs-on: ubuntu-latest
