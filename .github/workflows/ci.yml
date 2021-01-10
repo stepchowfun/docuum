@@ -38,7 +38,14 @@ jobs:
           command: build
           args: --release
       # lint already runs on Linux and check is not needed as already happens while building
-      - run: |
+      - name: Cleanup docker
+        run: |
+          mkdir C:\docker-data
+          Set-Content -Value "`{`"data-root`":`"C:\\docker-data`"`}" -Path C:\ProgramData\docker\config\daemon.json
+          Restart-Service docker
+        shell: powershell
+      - name: Run integration tests
+        run: |
           WINDOWS=true ./integration_test.sh
         shell: bash
 
