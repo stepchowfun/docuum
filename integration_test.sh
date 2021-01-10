@@ -12,9 +12,6 @@ done
 # Start Docuum in the background.
 echo 'Starting Docuum…'
 if $WINDOWS; then
-  # Windows integration tests doesn't run with dind so we need to prune all images on the CI worker
-  echo 'Pruning images on Windows CI worker…'
-  docker image prune -a -f
   target/release/docuum.exe --threshold 725MB &
 else
   /artifacts/docuum-x86_64-unknown-linux-musl --threshold 13MB &
