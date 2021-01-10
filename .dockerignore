@@ -2,3 +2,6 @@
 # `/release/`.
 /artifacts/
 /target/
+Dockerfile.unix
+Dockerfile.windows
+.dockerignore
