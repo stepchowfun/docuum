@@ -2,6 +2,7 @@
 # `/release/`.
 /artifacts/
 /target/
+.github
 Dockerfile.unix
 Dockerfile.windows
 .dockerignore
