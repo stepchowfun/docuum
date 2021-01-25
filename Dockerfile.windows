@@ -11,7 +11,8 @@ RUN $env:RUSTFLAGS = '-C target-feature=+crt-static'; `
     cargo build --release"
 
 FROM mcr.microsoft.com/windows/nanoserver:1809
-USER ContainerAdministrator  # needed for access to named pipe
+# admin user needed for access to named pipe
+USER ContainerAdministrator
 ENTRYPOINT [ "docuum" ]
 COPY --from=build C:\ProgramData\chocolatey\lib\docker-cli\tools\docker.exe .
 COPY --from=build C:\build\target\release\docuum.exe .
