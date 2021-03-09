@@ -95,7 +95,7 @@ tasks:
     input_paths:
       - .ignore # Used by `tagref`
       - install.sh # Linted by ShellCheck
-      - release.sh   # Linted by ShellCheck
+      - release.sh # Linted by ShellCheck
     user: user
     command: |
       set -euo pipefail
@@ -106,7 +106,10 @@ tasks:
         --deny warnings --deny clippy::all --deny clippy::pedantic
 
       # Check code formatting.
-      cargo fmt --all -- --check || echo 'ERROR: Please correct the formatting errors above.' 1>&2
+      if ! cargo fmt --all -- --check; then
+        echo 'ERROR: Please correct the formatting errors above.' 1>&2
+        exit 1
+      fi
 
       # Check references.
       tagref
@@ -132,7 +135,6 @@ tasks:
         exit 1
       fi
 
-
   run:
     description: Run the program.
     dependencies:
@@ -154,7 +156,7 @@ tasks:
       set -euo pipefail
       . $HOME/.cargo/env
       find src -type f -name '*.rs' -exec touch {} +
-      cargo check
+      cargo check --all --all-targets --all-features
 
   format:
     description: Format the source code.
