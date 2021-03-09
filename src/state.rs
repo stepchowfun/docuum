@@ -2,11 +2,11 @@ use crate::format::CodeStr;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
+    env,
     fs::{create_dir_all, read_to_string},
     io::{self, Write},
     path::{Path, PathBuf},
-    time::Duration,
-    env
+    time::Duration
 };
 use tempfile::NamedTempFile;
 
