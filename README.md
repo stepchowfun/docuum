@@ -1,6 +1,6 @@
 # *Docuum:* LRU eviction of Docker images
 
-[![Build status](https://github.com/stepchowfun/docuum/workflows/Continuous%20integration/badge.svg?branch=master)](https://github.com/stepchowfun/docuum/actions?query=branch%3Amaster)
+[![Build status](https://github.com/stepchowfun/docuum/workflows/Continuous%20integration/badge.svg?branch=main)](https://github.com/stepchowfun/docuum/actions?query=branch%3Amain)
 
 *Docuum* performs least recently used (LRU) eviction of Docker images to keep the disk usage below a given threshold.
 
@@ -116,7 +116,7 @@ docker run \
 If you are running macOS or a GNU-based Linux on an x86-64 CPU, you can install Docuum with this command:
 
 ```sh
-curl https://raw.githubusercontent.com/stepchowfun/docuum/master/install.sh -LSfs | sh
+curl https://raw.githubusercontent.com/stepchowfun/docuum/main/install.sh -LSfs | sh
 ```
 
 The same command can be used again to update Docuum to the latest version.
@@ -133,7 +133,7 @@ The installation script supports the following environment variables:
 For example, the following will install Docuum into the working directory:
 
 ```sh
-curl https://raw.githubusercontent.com/stepchowfun/docuum/master/install.sh -LSfs | PREFIX=. sh
+curl https://raw.githubusercontent.com/stepchowfun/docuum/main/install.sh -LSfs | PREFIX=. sh
 ```
 
 ### Manual installation
