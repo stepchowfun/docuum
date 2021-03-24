@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 mod format;
 mod run;
 mod state;
