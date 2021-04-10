@@ -94,14 +94,13 @@ fn settings() -> io::Result<Settings> {
         .setting(AppSettings::UnifiedHelpMessage)
         .arg(
             Arg::with_name(THRESHOLD_ARG)
+                .value_name("THRESHOLD")
                 .short("t")
                 .long(THRESHOLD_ARG)
-                .value_name("THRESHOLD")
                 .help(&format!(
                     "Sets the maximum amount of space to be used for Docker images (default: {})",
                     DEFAULT_THRESHOLD.code_str(),
-                ))
-                .takes_value(true),
+                )),
         )
         .get_matches();
 
