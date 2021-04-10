@@ -91,6 +91,7 @@ fn settings() -> io::Result<Settings> {
         .about("Docuum performs LRU cache eviction for Docker images.")
         .setting(AppSettings::ColoredHelp)
         .setting(AppSettings::NextLineHelp)
+        .setting(AppSettings::NextLineHelp)
         .setting(AppSettings::UnifiedHelpMessage)
         .arg(
             Arg::with_name(THRESHOLD_OPTION)
