@@ -31,7 +31,7 @@ const DEFAULT_LOG_LEVEL: LevelFilter = LevelFilter::Info;
 const DEFAULT_THRESHOLD: &str = "10 GB";
 
 // Command-line argument and option names
-const THRESHOLD_ARG: &str = "threshold";
+const THRESHOLD_OPTION: &str = "threshold";
 
 // This struct represents the command-line arguments.
 pub struct Settings {
@@ -93,10 +93,10 @@ fn settings() -> io::Result<Settings> {
         .setting(AppSettings::NextLineHelp)
         .setting(AppSettings::UnifiedHelpMessage)
         .arg(
-            Arg::with_name(THRESHOLD_ARG)
+            Arg::with_name(THRESHOLD_OPTION)
                 .value_name("THRESHOLD")
                 .short("t")
-                .long(THRESHOLD_ARG)
+                .long(THRESHOLD_OPTION)
                 .help(&format!(
                     "Sets the maximum amount of space to be used for Docker images (default: {})",
                     DEFAULT_THRESHOLD.code_str(),
@@ -106,7 +106,7 @@ fn settings() -> io::Result<Settings> {
 
     // Read the threshold.
     let default_threshold = Byte::from_str(DEFAULT_THRESHOLD).unwrap(); // Manually verified safe
-    let threshold = matches.value_of(THRESHOLD_ARG).map_or_else(
+    let threshold = matches.value_of(THRESHOLD_OPTION).map_or_else(
         || Ok(default_threshold),
         |threshold| {
             Byte::from_str(threshold).map_err(|_| {
