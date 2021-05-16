@@ -11,6 +11,7 @@ use std::{
     cmp::max,
     collections::{HashMap, HashSet},
     io::{self, BufRead, BufReader},
+    mem::drop,
     process::{Command, Stdio},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -610,8 +611,8 @@ pub fn run(settings: &Settings, state: &mut State) -> io::Result<()> {
             .stdout(Stdio::piped())
             .spawn()?,
         |mut child| {
-            let _ = child.kill();
-            let _ = child.wait();
+            drop(child.kill());
+            drop(child.wait());
         },
     );
 
