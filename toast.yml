@@ -31,7 +31,7 @@ tasks:
     command: |
       set -euo pipefail
       curl https://sh.rustup.rs -sSf |
-        sh -s -- -y --default-toolchain 1.50.0
+        sh -s -- -y --default-toolchain 1.52.1
       . $HOME/.cargo/env
       rustup component add clippy
       rustup component add rustfmt
@@ -86,7 +86,7 @@ tasks:
     command: |
       set -euo pipefail
       . $HOME/.cargo/env
-      cargo test
+      NO_COLOR=true cargo test # [tag:colorless_tests]
 
   lint:
     description: Run the linters.
@@ -96,10 +96,16 @@ tasks:
       - .ignore # Used by `tagref`
       - install.sh # Linted by ShellCheck
       - release.sh # Linted by ShellCheck
+      - toast.yml # Contains tags checked by `tagref`
     user: user
     command: |
       set -euo pipefail
       . $HOME/.cargo/env
+
+      # The command below is sometimes needed to force Clippy to actually run. It shouldn't be
+      # needed once https://github.com/rust-lang/rust-clippy/issues/4612 lands. At the time of this
+      # writing, it seems that will land in Rust 1.52.0 on 2021-05-06.
+      cargo clean --package docuum
 
       # Lint Rust files.
       cargo clippy --all-targets --all-features -- \
