@@ -11,6 +11,7 @@ use chrono::Local;
 use clap::{App, AppSettings, Arg};
 use env_logger::{fmt::Color, Builder};
 use log::{Level, LevelFilter};
+use regex::RegexSet;
 use std::{
     env,
     io::{self, Write},
@@ -32,10 +33,12 @@ const DEFAULT_THRESHOLD: &str = "10 GB";
 
 // Command-line argument and option names
 const THRESHOLD_OPTION: &str = "threshold";
+const KEEP_OPTION: &str = "keep";
 
 // This struct represents the command-line arguments.
 pub struct Settings {
     threshold: Byte,
+    keep: Option<RegexSet>,
 }
 
 // Set up the logger.
@@ -102,6 +105,16 @@ fn settings() -> io::Result<Settings> {
                     DEFAULT_THRESHOLD.code_str(),
                 )),
         )
+        .arg(
+            Arg::with_name(KEEP_OPTION)
+                .value_name("KEEP")
+                .short("k")
+                .long(KEEP_OPTION)
+                .multiple(true)
+                .number_of_values(1)
+                .required(false)
+                .help("Regular expression of repository names to keep despite space constraints"),
+        )
         .get_matches();
 
     // Read the threshold.
@@ -118,7 +131,20 @@ fn settings() -> io::Result<Settings> {
         },
     )?;
 
-    Ok(Settings { threshold })
+    let keep = match matches.values_of(KEEP_OPTION) {
+        Some(values) => match RegexSet::new(values) {
+            Ok(set) => Some(set),
+            Err(_) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "Invalid regex format provided",
+                ))
+            }
+        },
+        None => None,
+    };
+
+    Ok(Settings { threshold, keep })
 }
 
 // Let the fun begin!

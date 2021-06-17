@@ -5,6 +5,7 @@ use crate::{
 };
 use byte_unit::Byte;
 use chrono::DateTime;
+use regex::RegexSet;
 use scopeguard::guard;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -58,6 +59,7 @@ struct SpaceRecord {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ImageInfo {
     id: String,
+    repository: String,
     parent_id: Option<String>,
     created_since_epoch: Duration,
 }
@@ -136,7 +138,7 @@ fn list_images(state: &mut State) -> io::Result<Vec<ImageInfo>> {
             "--all",
             "--no-trunc",
             "--format",
-            "{{.ID}}\\t{{.CreatedAt}}",
+            "{{.ID}}\\t{{.Repository}}\\t{{.CreatedAt}}",
         ])
         .stderr(Stdio::inherit())
         .output()?;
@@ -162,15 +164,20 @@ fn list_images(state: &mut State) -> io::Result<Vec<ImageInfo>> {
                     continue;
                 }
 
-                let tab_index = trimmed_line.find('\t').ok_or_else(|| {
-                    io::Error::new(io::ErrorKind::Other, "Failed to split image ID and date.")
-                })?;
-                let (image_id, date_str) = trimmed_line.split_at(tab_index);
-                images.push(ImageInfo {
-                    id: image_id.trim().to_owned(),
-                    parent_id: None, // This will be populated below.
-                    created_since_epoch: parse_docker_date(&date_str)?,
-                });
+                let image_parts = trimmed_line.split('\t').take(3).collect::<Vec<_>>();
+                if let [id, repository, date_str] = image_parts[..] {
+                    images.push(ImageInfo {
+                        id: id.trim().to_owned(),
+                        repository: repository.to_owned(),
+                        parent_id: None, // This will be populated below.
+                        created_since_epoch: parse_docker_date(date_str)?,
+                    });
+                } else {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "Failed to split image ID and date.",
+                    ));
+                }
             }
             Ok(images)
         })?;
@@ -520,7 +527,7 @@ fn construct_polyforest(
 }
 
 // The main vacuum logic
-fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
+fn vacuum(state: &mut State, threshold: &Byte, keep: &Option<RegexSet>) -> io::Result<()> {
     // Find all current images.
     let image_infos = list_images(state)?;
 
@@ -538,6 +545,25 @@ fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
             .cmp(&y.last_used_since_epoch)
             .then(y.ancestors.cmp(&x.ancestors))
     });
+
+    // If the user provided the keep argument, we need to filter out those images which match the
+    // provided regexes.
+    if let Some(regex_set) = keep {
+        sorted_image_nodes = sorted_image_nodes
+            .into_iter()
+            .filter(|image_node| {
+                if regex_set.is_match(&image_node.image_info.repository) {
+                    info!(
+                        "Skipping image {} which matches one or more of the provided regexs",
+                        image_node.image_info.repository
+                    );
+                    return false;
+                }
+
+                true
+            })
+            .collect();
+    }
 
     // Check if we're over the threshold.
     let mut deleted_image_ids = HashSet::new();
@@ -601,7 +627,7 @@ fn vacuum(state: &mut State, threshold: &Byte) -> io::Result<()> {
 pub fn run(settings: &Settings, state: &mut State) -> io::Result<()> {
     // Run the main vacuum logic.
     info!("Performing an initial vacuum on startup\u{2026}");
-    vacuum(state, &settings.threshold)?;
+    vacuum(state, &settings.threshold, &settings.keep)?;
     state::save(&state)?;
 
     // Spawn `docker events --format '{{json .}}'`.
@@ -677,7 +703,7 @@ pub fn run(settings: &Settings, state: &mut State) -> io::Result<()> {
         touch_image(state, &image_id, true)?;
 
         // Run the main vacuum logic.
-        vacuum(state, &settings.threshold)?;
+        vacuum(state, &settings.threshold, &settings.keep)?;
 
         // Persist the state.
         state::save(&state)?;
@@ -735,6 +761,7 @@ mod tests {
 
         let image_info = ImageInfo {
             id: image_id.to_owned(),
+            repository: String::from("docuum"),
             parent_id: None,
             created_since_epoch: Duration::from_secs(100),
         };
@@ -765,6 +792,7 @@ mod tests {
 
         let image_info = ImageInfo {
             id: image_id.to_owned(),
+            repository: String::from("docuum"),
             parent_id: None,
             created_since_epoch: Duration::from_secs(100),
         };
@@ -812,12 +840,14 @@ mod tests {
 
         let image_info_0 = ImageInfo {
             id: image_id_0.to_owned(),
+            repository: String::from("docuum"),
             parent_id: None,
             created_since_epoch: Duration::from_secs(100),
         };
 
         let image_info_1 = ImageInfo {
             id: image_id_1.to_owned(),
+            repository: String::from("cargo"),
             parent_id: Some(image_id_0.to_owned()),
             created_since_epoch: Duration::from_secs(101),
         };
@@ -874,12 +904,14 @@ mod tests {
 
         let image_info_0 = ImageInfo {
             id: image_id_0.to_owned(),
+            repository: String::from("docuum"),
             parent_id: None,
             created_since_epoch: Duration::from_secs(100),
         };
 
         let image_info_1 = ImageInfo {
             id: image_id_1.to_owned(),
+            repository: String::from("cargo"),
             parent_id: Some(image_id_0.to_owned()),
             created_since_epoch: Duration::from_secs(101),
         };
@@ -944,18 +976,21 @@ mod tests {
 
         let image_info_0 = ImageInfo {
             id: image_id_0.to_owned(),
+            repository: String::from("docuum"),
             parent_id: None,
             created_since_epoch: Duration::from_secs(100),
         };
 
         let image_info_1 = ImageInfo {
             id: image_id_1.to_owned(),
+            repository: String::from("cargo"),
             parent_id: Some(image_id_0.to_owned()),
             created_since_epoch: Duration::from_secs(101),
         };
 
         let image_info_2 = ImageInfo {
             id: image_id_2.to_owned(),
+            repository: String::from("rustc"),
             parent_id: Some(image_id_1.to_owned()),
             created_since_epoch: Duration::from_secs(102),
         };
@@ -1033,18 +1068,21 @@ mod tests {
 
         let image_info_0 = ImageInfo {
             id: image_id_0.to_owned(),
+            repository: String::from("docuum"),
             parent_id: None,
             created_since_epoch: Duration::from_secs(100),
         };
 
         let image_info_1 = ImageInfo {
             id: image_id_1.to_owned(),
+            repository: String::from("cargo"),
             parent_id: Some(image_id_0.to_owned()),
             created_since_epoch: Duration::from_secs(101),
         };
 
         let image_info_2 = ImageInfo {
             id: image_id_2.to_owned(),
+            repository: String::from("rustc"),
             parent_id: Some(image_id_1.to_owned()),
             created_since_epoch: Duration::from_secs(102),
         };
@@ -1122,18 +1160,21 @@ mod tests {
 
         let image_info_0 = ImageInfo {
             id: image_id_0.to_owned(),
+            repository: String::from("docuum"),
             parent_id: None,
             created_since_epoch: Duration::from_secs(100),
         };
 
         let image_info_1 = ImageInfo {
             id: image_id_1.to_owned(),
+            repository: String::from("cargo"),
             parent_id: Some(image_id_0.to_owned()),
             created_since_epoch: Duration::from_secs(101),
         };
 
         let image_info_2 = ImageInfo {
             id: image_id_2.to_owned(),
+            repository: String::from("rustc"),
             parent_id: Some(image_id_0.to_owned()),
             created_since_epoch: Duration::from_secs(102),
         };
