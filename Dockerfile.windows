@@ -2,8 +2,7 @@
 
 FROM lpetrut/rust_win_buildtools AS build
 SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
-RUN iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'));`
-    choco install -y docker-cli;
+ADD https://github.com/StefanScherer/docker-cli-builder/releases/download/20.10.5/docker.exe .
 
 WORKDIR /build
 COPY . .
@@ -14,5 +13,5 @@ FROM mcr.microsoft.com/windows/nanoserver:1809
 # admin user needed for access to named pipe
 USER ContainerAdministrator
 ENTRYPOINT [ "docuum" ]
-COPY --from=build C:\ProgramData\chocolatey\lib\docker-cli\tools\docker.exe .
+COPY --from=build C:\docker.exe .
 COPY --from=build C:\build\target\release\docuum.exe .
