@@ -1,6 +1,6 @@
 # escape=`
 
-FROM yodal/rust-windows AS build
+FROM lpetrut/rust_win_buildtools AS build
 SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 RUN iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'));`
     choco install -y docker-cli;
