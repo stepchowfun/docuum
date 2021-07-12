@@ -1,8 +1,4 @@
-# Keep this file in sync with `.gitignore` and `.ignore`, but don't ignore
-# `/release/`.
-/artifacts/
+# [tag:dockerignore] Keep this in sync with [ref:excluded_input_paths] and [ref:gitignore], but
+# don't ignore /artifacts/.
+/.git/
 /target/
-.github
-Dockerfile.unix
-Dockerfile.windows
-.dockerignore

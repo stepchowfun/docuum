@@ -1,25 +1,54 @@
 image: ubuntu:20.04
-default: check
+default: build
 tasks:
   install_packages:
     description: Install system packages.
     command: |
+      # Make Bash not silently ignore errors.
       set -euo pipefail
+
+      # Install the following packages:
+      #
+      # - build-essential - Used for linking the binary
+      # - curl            - Used for installing Tagref
+      # - lsb-release     - Used below to determine the Ubuntu release codename
+      # - ripgrep         - Used for line length checking
+      # - shellcheck      - Used for linting shell scripts
       apt-get update
-      apt-get install --yes build-essential curl ripgrep shellcheck
+      apt-get install --yes build-essential curl lsb-release ripgrep shellcheck
+
+      # Download Docker's official GPG key.
+      curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+        gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+
+      # Set up the Docker repository.
+      echo \
+        "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] "\
+        "https://download.docker.com/linux/ubuntu "\
+        "$(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
+
+      # Install the Docker CLI.
+      apt-get update
+      apt-get install --yes docker-ce-cli
 
   install_tagref:
     description: Install Tagref, a reference checking tool.
     dependencies:
       - install_packages
     command: |
+      # Make Bash not silently ignore errors.
       set -euo pipefail
+
+      # Install Tagref using the official installer script.
       curl https://raw.githubusercontent.com/stepchowfun/tagref/main/install.sh -LSfs | sh
 
   create_user:
     description: Create a user who doesn't have root privileges.
     command: |
+      # Make Bash not silently ignore errors.
       set -euo pipefail
+
+      # Create a user named `user` with a home directory.
       adduser --disabled-password --gecos '' user
 
   install_rust:
@@ -29,16 +58,24 @@ tasks:
       - create_user
     user: user
     command: |
+      # Make Bash not silently ignore errors.
       set -euo pipefail
-      curl https://sh.rustup.rs -sSf |
-        sh -s -- -y --default-toolchain 1.52.1
+
+      # Install stable Rust. [tag:rust_1_53_0]
+      curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- \
+        -y \
+        --default-toolchain 1.53.0 \
+        --profile minimal \
+        --component clippy
+
+      # Add Rust tools to `$PATH`.
       . $HOME/.cargo/env
-      rustup component add clippy
-      rustup component add rustfmt
-      rm -rf "$(dirname "$(rustup which rustc)")/../share"
+
+      # Install nightly Rust for the `trailing_comma` Rustfmt option.
+      rustup toolchain install nightly-2021-06-09 --profile minimal --component rustfmt
 
   install_tools:
-    description: Install the tools needed to build and lint the program.
+    description: Install the tools needed to build and validate the program.
     dependencies:
       - install_rust
       - install_tagref
@@ -52,18 +89,29 @@ tasks:
       - Cargo.toml
     user: user
     command: |
+      # Make Bash not silently ignore errors.
       set -euo pipefail
+
+      # Add Rust tools to `$PATH`.
       . $HOME/.cargo/env
+
+      # Create a "hello world" project with the dependencies we want to fetch.
       mv Cargo.lock Cargo.lock.og
       mv Cargo.toml Cargo.toml.og
       cargo init --vcs none
       mv Cargo.lock.og Cargo.lock
       mv Cargo.toml.og Cargo.toml
-      cargo build
-      cargo clean --package docuum
-      cargo build --release
-      cargo clean --release --package docuum
+
+      # Ask Cargo to build the project in order to fetch the dependencies.
+      cargo build --locked
+      cargo build --locked --release
       cargo clippy
+
+      # Delete the build artifacts.
+      cargo clean --package docuum
+      cargo clean --release --package docuum
+
+      # Delete the "hello world" code.
       rm -rf src
 
   build:
@@ -74,9 +122,14 @@ tasks:
       - src
     user: user
     command: |
+      # Make Bash not silently ignore errors.
       set -euo pipefail
+
+      # Add Rust tools to `$PATH`.
       . $HOME/.cargo/env
-      cargo build
+
+      # Build the project with Cargo.
+      cargo build --frozen
 
   test:
     description: Run the test suite.
@@ -84,60 +137,61 @@ tasks:
       - build
     user: user
     command: |
+      # Make Bash not silently ignore errors.
       set -euo pipefail
+
+      # Add Rust tools to `$PATH`.
       . $HOME/.cargo/env
-      NO_COLOR=true cargo test # [tag:colorless_tests]
+
+      # Run the tests with Cargo. The `NO_COLOR` variable is used to disable colored output for
+      # tests that make assertions regarding the output. [tag:colorless_tests]
+      NO_COLOR=true cargo test --frozen
 
   lint:
     description: Run the linters.
     dependencies:
       - build
     input_paths:
-      - .ignore # Used by `tagref`
-      - install.sh # Linted by ShellCheck
-      - release.sh # Linted by ShellCheck
-      - toast.yml # Contains tags checked by `tagref`
+      - .
+    excluded_input_paths:
+      # [tag:excluded_input_paths] Keep this in sync with [ref:gitignore] and [ref:dockerignore].
+      - .git
+      - artifacts
+      - target
     user: user
     command: |
+      # Make Bash not silently ignore errors.
       set -euo pipefail
+
+      # Add Rust tools to `$PATH`.
       . $HOME/.cargo/env
 
-      # The command below is sometimes needed to force Clippy to actually run. It shouldn't be
-      # needed once https://github.com/rust-lang/rust-clippy/issues/4612 lands. At the time of this
-      # writing, it seems that will land in Rust 1.52.0 on 2021-05-06.
-      cargo clean --package docuum
+      # Lint the code with Clippy.
+      cargo clippy \
+        --all-features \
+        --all-targets -- \
+        --deny clippy::all \
+        --deny clippy::pedantic \
+        --deny warnings
 
-      # Lint Rust files.
-      cargo clippy --all-targets --all-features -- \
-        --deny warnings --deny clippy::all --deny clippy::pedantic
+      # Check references with Tagref.
+      tagref
 
-      # Check code formatting.
-      if ! cargo fmt --all -- --check; then
+      # Lint shell files with ShellCheck.
+      find . -type f -name '*.sh' | xargs shellcheck
+
+      # Check code formatting with Rustfmt. We temporarily convert macro invocations into function
+      # calls so that Rustfmt's `trailing_comma` feature applies to macro arguments. [ref:format]
+      rg '!\(' --type rust --files-with-matches src | xargs sed -i 's/!(/_(/g'
+      if ! cargo +nightly-2021-06-09 fmt --all -- --check; then
         echo 'ERROR: Please correct the formatting errors above.' 1>&2
         exit 1
       fi
-
-      # Check references.
-      tagref
-
-      # Lint shell files.
-      shellcheck install.sh release.sh
+      rg '_\(' --type rust --files-with-matches src | xargs sed -i 's/_(/!(/g'
 
       # Enforce that lines span no more than 100 columns.
-      if rg --line-number --type rust '.{101}'; then
+      if rg --line-number --type rust '.{101}' src; then
         echo "There are lines spanning more than 100 columns." >&2
-        exit 1
-      fi
-
-      # Enforce trailing commas in multi-line sequences.
-      if rg --line-number --multiline --type rust '[^,]\n(\s*)\)'; then
-        echo "There are multi-line sequences without trailing commas." >&2
-        exit 1
-      fi
-
-      # Forbid trailing commas in single-line sequences.
-      if rg --line-number --type rust '[^(],\s*\)'; then
-        echo "There are single-line sequences with trailing commas." >&2
         exit 1
       fi
 
@@ -147,22 +201,14 @@ tasks:
       - build
     user: user
     command: |
+      # Make Bash not silently ignore errors.
       set -euo pipefail
-      . $HOME/.cargo/env
-      cargo run -- --help
 
-  check:
-    description: Type-check the program.
-    dependencies:
-      - fetch_crates
-    input_paths:
-      - src
-    user: user
-    command: |
-      set -euo pipefail
+      # Add Rust tools to `$PATH`.
       . $HOME/.cargo/env
-      find src -type f -name '*.rs' -exec touch {} +
-      cargo check --all --all-targets --all-features
+
+      # Run the program with Cargo.
+      cargo run --frozen -- --help
 
   format:
     description: Format the source code.
@@ -174,13 +220,20 @@ tasks:
       - src
     user: user
     command: |
+      # Make Bash not silently ignore errors.
       set -euo pipefail
+
+      # Add Rust tools to `$PATH`.
       . $HOME/.cargo/env
-      cargo fmt --all
+
+      # Format the code with Rustfmt. We temporarily convert macro invocations into function calls
+      # so that Rustfmt's `trailing_comma` feature applies to macro arguments. [tag:format]
+      rg '!\(' --type rust --files-with-matches src | xargs sed -i 's/!(/_(/g'
+      cargo +nightly-2021-06-09 fmt --all
+      rg '_\(' --type rust --files-with-matches src | xargs sed -i 's/_(/!(/g'
 
   release:
-    description: >-
-      Build the program in release mode and export the binary to the `artifacts` directory.
+    description: Build and output the release binaries for Linux.
     dependencies:
       - fetch_crates
     input_paths:
@@ -189,11 +242,81 @@ tasks:
       - artifacts
     user: user
     command: |
+      # Make Bash not silently ignore errors.
       set -euo pipefail
+
+      # Add Rust tools to `$PATH`.
       . $HOME/.cargo/env
+
+      # Add the targets. It's likely that this script is currently running in one of them.
+      rustup target add x86_64-unknown-linux-gnu
       rustup target add x86_64-unknown-linux-musl
-      cargo build --release
-      cargo build --release --target x86_64-unknown-linux-musl
+
+      # Build the project for both Linux targets with Cargo.
+      cargo build --locked --release --target x86_64-unknown-linux-gnu
+      cargo build --locked --release --target x86_64-unknown-linux-musl
+
+      # Move the binaries to a more conveniennt location for exporting.
       mkdir artifacts
-      cp target/release/docuum artifacts/docuum-x86_64-unknown-linux-gnu
-      cp target/x86_64-unknown-linux-musl/release/docuum artifacts/docuum-x86_64-unknown-linux-musl
+      cp \
+        target/x86_64-unknown-linux-gnu/release/docuum \
+        artifacts/docuum-x86_64-unknown-linux-gnu
+      cp \
+        target/x86_64-unknown-linux-musl/release/docuum \
+        artifacts/docuum-x86_64-unknown-linux-musl
+
+  validate_release:
+    description: Validate the release.
+    dependencies:
+      - release
+    input_paths:
+      - integration_test.sh
+    cache: false
+    mount_paths:
+      - /var/run/docker.sock
+    command: |
+      # Make Bash not silently ignore errors.
+      set -euo pipefail
+
+      # Run the integration test suite [tag:integration_test_step]. We use a Docker-in-Docker
+      # environment to run the suite because we don't want to inadvertently delete images from the
+      # host machine.
+      docker run \
+        --privileged \
+        --name dind \
+        --detach \
+        docker:dind
+      docker exec dind apk add bash
+      docker cp "artifacts/docuum-x86_64-unknown-linux-musl" dind:/
+      docker cp integration_test.sh dind:/
+      docker exec dind ./integration_test.sh
+      docker rm --force dind
+
+  publish:
+    description: Publish the crate to crates.io.
+    dependencies:
+      - fetch_crates
+    environment:
+      CRATES_IO_TOKEN: null
+    input_paths:
+      - README.md
+      - src
+    user: user
+    command: |
+      # Make Bash not silently ignore errors.
+      set -euo pipefail
+
+      # Add Rust tools to `$PATH`.
+      . $HOME/.cargo/env
+
+      # Fetch the program version.
+      VERSION="$(cargo pkgid | cut -d# -f2 | cut -d: -f2)"
+
+      # If this version of the package already exists on crates.io, there's nothing more to do.
+      if cargo search docuum | grep "docuum = \"$VERSION\""; then
+        echo "Version $VERSION of crate already exists."
+        exit
+      fi
+
+      # Publish to crates.io.
+      cargo publish --locked --token "$CRATES_IO_TOKEN"

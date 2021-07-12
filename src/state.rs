@@ -2,10 +2,9 @@ use crate::format::CodeStr;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    env,
     fs::{create_dir_all, read_to_string},
     io::{self, Write},
-    path::{Path, PathBuf},
+    path::PathBuf,
     time::Duration,
 };
 use tempfile::NamedTempFile;
@@ -32,17 +31,8 @@ pub struct State {
 
 // Where the program state is persisted on disk
 fn path() -> Option<PathBuf> {
-    let mut base_path = dirs::data_local_dir();
-
-    // Overwrite the directory on Windows because it's empty in nanoserver
-    if cfg!(windows) {
-        if let Ok(local_dir) = env::var("LOCALAPPDATA") {
-            base_path = Option::Some(Path::new(&local_dir).to_path_buf())
-        }
-    }
-
     // [tag:state_path_has_parent]
-    base_path.map(|path| path.join("docuum/state.yml"))
+    dirs::data_local_dir().map(|path| path.join("docuum/state.yml"))
 }
 
 // Return the state in which the program starts, if no state was loaded from disk.
