@@ -5,7 +5,7 @@ FROM alpine:3.12.1
 RUN apk add --no-cache docker-cli
 
 # Install Docuum.
-COPY release/docuum-x86_64-unknown-linux-musl /usr/local/bin/docuum
+COPY artifacts/docuum-x86_64-unknown-linux-musl /usr/local/bin/docuum
 
 # Set the entrypoint to Docuum. Note that Docuum is not intended to be run as
 # an init process, so be sure to pass `--init` to `docker run`.

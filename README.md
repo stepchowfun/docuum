@@ -1,4 +1,4 @@
-# *Docuum:* LRU eviction of Docker images
+# Docuum: LRU eviction of Docker images
 
 [![Build status](https://github.com/stepchowfun/docuum/workflows/Continuous%20integration/badge.svg?branch=main)](https://github.com/stepchowfun/docuum/actions?query=branch%3Amain)
 
@@ -30,7 +30,9 @@ Docuum is meant to be started once and run forever, rather than as a cron job. O
 $ docuum --threshold '30 GB'
 ```
 
-You probably want to run Docuum as a daemon, e.g., with [launchd](https://www.launchd.info/), [systemd](https://www.freedesktop.org/wiki/Software/systemd/), etc. You may consult your operating system documentation for instructions on how to do that. For macOS, for example, you can create a file (owned by root) called `/Library/LaunchDaemons/local.docuum.plist` with the following:
+Then you can use `Ctrl`+`C` to stop it.
+
+However, you probably want to run Docuum as a [daemon](https://en.wikipedia.org/wiki/Daemon_\(computing\)), e.g., with [launchd](https://www.launchd.info/), [systemd](https://www.freedesktop.org/wiki/Software/systemd/), etc. You may consult your operating system documentation for instructions on how to do that. On macOS, for example, you can create a file (owned by root) called `/Library/LaunchDaemons/local.docuum.plist` with the following:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -83,9 +85,9 @@ OPTIONS:
 
 ## Installation
 
-### Running Docuum in a Docker container
+### Running Docuum in a Docker container on macOS or Linux (x86-64)
 
-If you prefer not to install Docuum on your system, you can run it in a container. To run it in the foreground, you can use a command like the following:
+If you prefer not to install Docuum on your system and you're running macOS or Linux on an x86-64 CPU, you can run it in a container. To run it in the foreground, you can use a command like the following:
 
 ```sh
 docker run \
@@ -111,21 +113,17 @@ docker run \
   stephanmisc/docuum --threshold '15 GB'
 ```
 
-### Easy installation
+### Installation on macOS or Linux (x86-64)
 
-If you are running macOS or a GNU-based Linux on an x86-64 CPU, you can install Docuum with this command:
+If you're running macOS or Linux on an x86-64 CPU, you can install Docuum with this command:
 
 ```sh
 curl https://raw.githubusercontent.com/stepchowfun/docuum/main/install.sh -LSfs | sh
 ```
 
-The same command can be used again to update Docuum to the latest version.
+The same command can be used again to update to the latest version.
 
-**NOTE:** Piping `curl` to `sh` is dangerous since the server might be compromised. If you're concerned about this, you can download and inspect the installation script or choose one of the other installation methods.
-
-#### Customizing the installation
-
-The installation script supports the following environment variables:
+The installation script supports the following optional environment variables:
 
 - `VERSION=x.y.z` (defaults to the latest version)
 - `PREFIX=/path/to/install` (defaults to `/usr/local/bin`)
@@ -136,9 +134,13 @@ For example, the following will install Docuum into the working directory:
 curl https://raw.githubusercontent.com/stepchowfun/docuum/main/install.sh -LSfs | PREFIX=. sh
 ```
 
-### Manual installation
+If you prefer not to use this installation method, you can download the binary from the [releases page](https://github.com/stepchowfun/docuum/releases), make it executable (e.g., with `chmod`), and place it in some directory in your [`PATH`](https://en.wikipedia.org/wiki/PATH_\(variable\)) (e.g., `/usr/local/bin`).
 
-The [releases page](https://github.com/stepchowfun/docuum/releases) has precompiled binaries for macOS or Linux systems running on an x86-64 CPU. You can download one of them and place it in a directory listed in your [`PATH`](https://en.wikipedia.org/wiki/PATH_\(variable\)).
+### Installation on Windows (x86-64)
+
+If you're running Windows on an x86-64 CPU, download the latest binary from the [releases page](https://github.com/stepchowfun/docuum/releases) and rename it to `docuum` (or `docuum.exe` if you have file extensions visible). Create a directory called `Docuum` in your `%PROGRAMFILES%` directory (e.g., `C:\Program Files\Docuum`), and place the renamed binary in there. Then, in the "Advanced" tab of the "System Properties" section of "Control Panel", click on "Environment Variables..." and add the full path to the new `Docuum` directory to the `PATH` variable under "System variables". Note that the `Program Files` directory might have a different name if Windows is configured for language other than English.
+
+To update to an existing installation, simply replace the existing binary.
 
 ### Installation with Cargo
 

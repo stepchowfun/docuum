@@ -11,7 +11,7 @@ done
 
 # Start Docuum in the background.
 echo 'Starting Docuum…'
-/artifacts/docuum-x86_64-unknown-linux-musl --threshold 13MB &
+/docuum-x86_64-unknown-linux-musl --threshold 13MB &
 DOCUUM_PID="$!"
 
 # This function waits for Docuum to start sleeping by checking the process state. The process could
