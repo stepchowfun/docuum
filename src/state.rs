@@ -34,7 +34,7 @@ pub struct State {
 fn path() -> Option<PathBuf> {
     let mut base_path = dirs::data_local_dir();
 
-    // Overwrite the directory on Windows because it's empty in nanoserver
+    // Overwrite the directory on Windows because it's empty in nanoserver.
     if cfg!(windows) {
         if let Ok(local_dir) = env::var("LOCALAPPDATA") {
             base_path = Option::Some(Path::new(&local_dir).to_path_buf())
