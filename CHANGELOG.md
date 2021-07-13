@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.19.0] - 2021-07-13
 
 ### Changed
-- Windows binary is now static linked, so no msvc libaries are required.
+- The Windows binary is now statically linked, which makes it portable enough to run with the `mcr.microsoft.com/windows/nanoserver` Docker image.
 
 ## [0.18.1] - 2021-07-13
 
