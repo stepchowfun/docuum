@@ -154,10 +154,26 @@ jobs:
           artifacts/x86_64-pc-windows-msvc/docuum.exe \
           artifacts/docuum-x86_64-pc-windows-msvc.exe
 
-        # Build and push the Docker images.
-        docker build --tag "stephanmisc/docuum:$VERSION" --tag stephanmisc/docuum:latest .
+        # Make the x86_64-unknown-linux-musl artifact executable again before building the Docker
+        # image with it below. See https://github.com/actions/upload-artifact/issues/38.
+        chmod a+x artifacts/docuum-x86_64-unknown-linux-musl
+
+        # Build the Docker image.
+        docker build --tag stephanmisc/docuum --tag "stephanmisc/docuum:$VERSION" .
+
+        # Run the Docker image to validate it.
+        docker run \
+          --init \
+          --rm \
+          --tty \
+          --name docuum \
+          --volume /var/run/docker.sock:/var/run/docker.sock \
+          --volume docuum:/root \
+          stephanmisc/docuum --help
+
+        # Push the Docker image.
+        docker push stephanmisc/docuum
         docker push "stephanmisc/docuum:$VERSION"
-        docker push stephanmisc/docuum:latest
 
         # Create the release.
         hub release create \
