@@ -14,7 +14,7 @@
   DESTINATION="${PREFIX:-/usr/local/bin}/docuum"
 
   # Which version to download
-  RELEASE="v${VERSION:-0.19.1}"
+  RELEASE="v${VERSION:-0.19.2}"
 
   # Determine which binary to download.
   FILENAME=''
