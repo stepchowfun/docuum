@@ -32,17 +32,15 @@ pub struct State {
 
 // Where the program state is persisted on disk
 fn path() -> Option<PathBuf> {
-    let mut base_path = dirs::data_local_dir();
-
-    // Overwrite the directory on Windows because it's empty in nanoserver.
-    if base_path.is_none() && cfg!(windows) {
-        if let Ok(local_dir) = env::var("LOCALAPPDATA") {
-            base_path = Option::Some(Path::new(&local_dir).to_path_buf())
-        }
-    }
-
     // [tag:state_path_has_parent]
-    base_path.map(|path| path.join("docuum/state.yml"))
+    dirs::data_local_dir()
+        .map(|path| path.join("docuum/state.yml"))
+        .or_else(|| {
+            // In the `mcr.microsoft.com/windows/nanoserver` Docker image, `dirs::data_local_dir()`
+            // returns `None` (see https://github.com/dirs-dev/dirs-rs/issues/34 for details). So
+            // we fall back to the value of the `LOCALAPPDATA` environment variable in that case.
+            env::var("LOCALAPPDATA").ok().map(Into::into)
+        })
 }
 
 // Return the state in which the program starts, if no state was loaded from disk.
