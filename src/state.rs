@@ -5,7 +5,7 @@ use std::{
     env,
     fs::{create_dir_all, read_to_string},
     io::{self, Write},
-    path::{Path, PathBuf},
+    path::PathBuf,
     time::Duration,
 };
 use tempfile::NamedTempFile;
