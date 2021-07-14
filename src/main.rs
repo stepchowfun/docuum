@@ -111,7 +111,7 @@ fn settings() -> io::Result<Settings> {
                 .short("k")
                 .long(KEEP_OPTION)
                 .multiple(true)
-                .help("Regular expression of repository names to keep despite space constraints"),
+                .help("Prevents Docuum from deleting repository:tag images that match the provided <REGEX>"),
         )
         .get_matches();
 

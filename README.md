@@ -76,8 +76,8 @@ OPTIONS:
     -h, --help
             Prints help information
 
-    -k, --keep <KEEP>...
-            Regular expression of repository names to keep despite space constraints
+    -k, --keep <REGEX>...
+            Prevents Docuum from deleting repository:tag images that match the provided <REGEX>
 
     -t, --threshold <THRESHOLD>
             Sets the maximum amount of space to be used for Docker images (default: 10 GB)

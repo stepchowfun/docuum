@@ -59,7 +59,7 @@ struct SpaceRecord {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ImageInfo {
     id: String,
-    repository: String,
+    repository_tag: String,
     parent_id: Option<String>,
     created_since_epoch: Duration,
 }
@@ -138,7 +138,7 @@ fn list_images(state: &mut State) -> io::Result<Vec<ImageInfo>> {
             "--all",
             "--no-trunc",
             "--format",
-            "{{.ID}}\\t{{.Repository}}\\t{{.CreatedAt}}",
+            "{{.ID}}\\t{{.Repository}}:{{.Tag}}\\t{{.CreatedAt}}",
         ])
         .stderr(Stdio::inherit())
         .output()?;
@@ -165,10 +165,10 @@ fn list_images(state: &mut State) -> io::Result<Vec<ImageInfo>> {
                 }
 
                 let image_parts = trimmed_line.split('\t').take(3).collect::<Vec<_>>();
-                if let [id, repository, date_str] = image_parts[..] {
+                if let [id, repository_tag, date_str] = image_parts[..] {
                     images.push(ImageInfo {
                         id: id.trim().to_owned(),
-                        repository: repository.to_owned(),
+                        repository_tag: repository_tag.to_owned(),
                         parent_id: None, // This will be populated below.
                         created_since_epoch: parse_docker_date(date_str)?,
                     });
@@ -552,15 +552,15 @@ fn vacuum(state: &mut State, threshold: &Byte, keep: &Option<RegexSet>) -> io::R
         sorted_image_nodes = sorted_image_nodes
             .into_iter()
             .filter(|image_node| {
-                if regex_set.is_match(&image_node.image_info.repository) {
+                if regex_set.is_match(&image_node.image_info.repository_tag) {
                     info!(
                         "Skipping image {} which matches one or more of the provided regexs",
-                        image_node.image_info.repository
+                        image_node.image_info.repository_tag
                     );
-                    return false;
+                    false
+                } else {
+                    true
                 }
-
-                true
             })
             .collect();
     }
@@ -761,7 +761,7 @@ mod tests {
 
         let image_info = ImageInfo {
             id: image_id.to_owned(),
-            repository: String::from("docuum"),
+            repository_tag: String::from("docuum:latest"),
             parent_id: None,
             created_since_epoch: Duration::from_secs(100),
         };
@@ -792,7 +792,7 @@ mod tests {
 
         let image_info = ImageInfo {
             id: image_id.to_owned(),
-            repository: String::from("docuum"),
+            repository_tag: String::from("docuum:latest"),
             parent_id: None,
             created_since_epoch: Duration::from_secs(100),
         };
@@ -840,14 +840,14 @@ mod tests {
 
         let image_info_0 = ImageInfo {
             id: image_id_0.to_owned(),
-            repository: String::from("docuum"),
+            repository_tag: String::from("docuum:latest"),
             parent_id: None,
             created_since_epoch: Duration::from_secs(100),
         };
 
         let image_info_1 = ImageInfo {
             id: image_id_1.to_owned(),
-            repository: String::from("cargo"),
+            repository_tag: String::from("cargo:latest"),
             parent_id: Some(image_id_0.to_owned()),
             created_since_epoch: Duration::from_secs(101),
         };
@@ -904,14 +904,14 @@ mod tests {
 
         let image_info_0 = ImageInfo {
             id: image_id_0.to_owned(),
-            repository: String::from("docuum"),
+            repository_tag: String::from("docuum:latest"),
             parent_id: None,
             created_since_epoch: Duration::from_secs(100),
         };
 
         let image_info_1 = ImageInfo {
             id: image_id_1.to_owned(),
-            repository: String::from("cargo"),
+            repository_tag: String::from("cargo:latest"),
             parent_id: Some(image_id_0.to_owned()),
             created_since_epoch: Duration::from_secs(101),
         };
@@ -976,21 +976,21 @@ mod tests {
 
         let image_info_0 = ImageInfo {
             id: image_id_0.to_owned(),
-            repository: String::from("docuum"),
+            repository_tag: String::from("docuum:latest"),
             parent_id: None,
             created_since_epoch: Duration::from_secs(100),
         };
 
         let image_info_1 = ImageInfo {
             id: image_id_1.to_owned(),
-            repository: String::from("cargo"),
+            repository_tag: String::from("cargo:latest"),
             parent_id: Some(image_id_0.to_owned()),
             created_since_epoch: Duration::from_secs(101),
         };
 
         let image_info_2 = ImageInfo {
             id: image_id_2.to_owned(),
-            repository: String::from("rustc"),
+            repository_tag: String::from("rustc:latest"),
             parent_id: Some(image_id_1.to_owned()),
             created_since_epoch: Duration::from_secs(102),
         };
@@ -1068,21 +1068,21 @@ mod tests {
 
         let image_info_0 = ImageInfo {
             id: image_id_0.to_owned(),
-            repository: String::from("docuum"),
+            repository_tag: String::from("docuum:latest"),
             parent_id: None,
             created_since_epoch: Duration::from_secs(100),
         };
 
         let image_info_1 = ImageInfo {
             id: image_id_1.to_owned(),
-            repository: String::from("cargo"),
+            repository_tag: String::from("cargo:latest"),
             parent_id: Some(image_id_0.to_owned()),
             created_since_epoch: Duration::from_secs(101),
         };
 
         let image_info_2 = ImageInfo {
             id: image_id_2.to_owned(),
-            repository: String::from("rustc"),
+            repository_tag: String::from("rustc:latest"),
             parent_id: Some(image_id_1.to_owned()),
             created_since_epoch: Duration::from_secs(102),
         };
@@ -1160,21 +1160,21 @@ mod tests {
 
         let image_info_0 = ImageInfo {
             id: image_id_0.to_owned(),
-            repository: String::from("docuum"),
+            repository_tag: String::from("docuum:latest"),
             parent_id: None,
             created_since_epoch: Duration::from_secs(100),
         };
 
         let image_info_1 = ImageInfo {
             id: image_id_1.to_owned(),
-            repository: String::from("cargo"),
+            repository_tag: String::from("cargo:latest"),
             parent_id: Some(image_id_0.to_owned()),
             created_since_epoch: Duration::from_secs(101),
         };
 
         let image_info_2 = ImageInfo {
             id: image_id_2.to_owned(),
-            repository: String::from("rustc"),
+            repository_tag: String::from("rustc:latest"),
             parent_id: Some(image_id_0.to_owned()),
             created_since_epoch: Duration::from_secs(102),
         };
