@@ -2,6 +2,7 @@ use crate::format::CodeStr;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
+    env,
     fs::{create_dir_all, read_to_string},
     io::{self, Write},
     path::PathBuf,
@@ -32,7 +33,14 @@ pub struct State {
 // Where the program state is persisted on disk
 fn path() -> Option<PathBuf> {
     // [tag:state_path_has_parent]
-    dirs::data_local_dir().map(|path| path.join("docuum/state.yml"))
+    dirs::data_local_dir()
+        .or_else(|| {
+            // In the `mcr.microsoft.com/windows/nanoserver` Docker image, `dirs::data_local_dir()`
+            // returns `None` (see https://github.com/dirs-dev/dirs-rs/issues/34 for details). So
+            // we fall back to the value of the `LOCALAPPDATA` environment variable in that case.
+            env::var("LOCALAPPDATA").ok().map(Into::into)
+        })
+        .map(|path| path.join("docuum/state.yml"))
 }
 
 // Return the state in which the program starts, if no state was loaded from disk.
