@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.19.2] - 2021-07-14
 
 ### Fixed
-- Use `LOCALAPPDATA` on windows when `dirs::data_local_dir()` is `None` which happens on `mcr.microsoft.com/windows/nanoserver` Docker image.
+- Added a workaround for a bug in the `mcr.microsoft.com/windows/nanoserver` Docker image so that Docuum can run in that environment.
 
 ## [0.19.1] - 2021-07-14
 
