@@ -175,7 +175,7 @@ fn list_images(state: &mut State) -> io::Result<Vec<ImageInfo>> {
                 } else {
                     return Err(io::Error::new(
                         io::ErrorKind::Other,
-                        "Failed to split image ID and date.",
+                        "Failed to parse image list output from Docker.",
                     ));
                 }
             }

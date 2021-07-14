@@ -122,7 +122,7 @@ fn settings() -> io::Result<Settings> {
         |threshold| {
             Byte::from_str(threshold).map_err(|_| {
                 io::Error::new(
-                    io::ErrorKind::Other,
+                    io::ErrorKind::InvalidInput,
                     format!("Invalid threshold {}.", threshold.code_str()),
                 )
             })
@@ -132,12 +132,7 @@ fn settings() -> io::Result<Settings> {
     let keep = match matches.values_of(KEEP_OPTION) {
         Some(values) => match RegexSet::new(values) {
             Ok(set) => Some(set),
-            Err(_) => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    "Invalid regex format provided",
-                ))
-            }
+            Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidInput, e)),
         },
         None => None,
     };
