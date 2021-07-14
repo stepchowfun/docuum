@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.19.1] - 2021-07-13
 
 ### Fixed
-- Use `LOCALAPPDATA` on windows because `dirs::data_local_dir()` is empty on windows nano server
+- Use `LOCALAPPDATA` on windows when `dirs::data_local_dir()` is `None` which happens on `mcr.microsoft.com/windows/nanoserver` Docker image.
 
 ## [0.19.0] - 2021-07-13
 
