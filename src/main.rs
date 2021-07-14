@@ -107,12 +107,10 @@ fn settings() -> io::Result<Settings> {
         )
         .arg(
             Arg::with_name(KEEP_OPTION)
-                .value_name("KEEP")
+                .value_name("REGEX")
                 .short("k")
                 .long(KEEP_OPTION)
                 .multiple(true)
-                .number_of_values(1)
-                .required(false)
                 .help("Regular expression of repository names to keep despite space constraints"),
         )
         .get_matches();
