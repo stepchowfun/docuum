@@ -297,7 +297,11 @@ fn space_usage() -> io::Result<Byte> {
                         return Byte::from_str(&space_record.size).map_err(|_| {
                             io::Error::new(
                                 io::ErrorKind::Other,
-                                format!("Invalid threshold {}.", space_record.size.code_str()),
+                                format!(
+                                    "Unable to parse {} from {}.",
+                                    space_record.size.code_str(),
+                                    "docker system df".code_str(),
+                                ),
                             )
                         });
                     }
