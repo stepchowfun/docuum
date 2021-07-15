@@ -111,6 +111,7 @@ fn settings() -> io::Result<Settings> {
                 .short("k")
                 .long(KEEP_OPTION)
                 .multiple(true)
+                .number_of_values(1)
                 .help("Prevents Docuum from deleting repository:tag images that match the provided <REGEX>"),
         )
         .get_matches();
