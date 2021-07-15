@@ -554,8 +554,9 @@ fn vacuum(state: &mut State, threshold: &Byte, keep: &Option<RegexSet>) -> io::R
             .filter(|image_node| {
                 if regex_set.is_match(&image_node.image_info.repository_tag) {
                     info!(
-                        "Skipping image {} which matches one or more of the provided regexs",
-                        image_node.image_info.repository_tag
+                        "Ignored image {} due to the {} flag.",
+                        image_node.image_info.repository_tag.code_str(),
+                        "--keep".code_str(),
                     );
                     false
                 } else {
