@@ -130,6 +130,7 @@ dependencies = [
  "dirs",
  "env_logger",
  "log",
+ "regex",
  "scopeguard",
  "serde",
  "serde_json",

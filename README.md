@@ -76,6 +76,9 @@ OPTIONS:
     -h, --help
             Prints help information
 
+    -k, --keep <REGEX>...
+            Prevents deletion of repository:tag images that match the provided <REGEX>
+
     -t, --threshold <THRESHOLD>
             Sets the maximum amount of space to be used for Docker images (default: 10 GB)
 
