@@ -17,8 +17,8 @@ pub struct Image {
     // The ID of the parent image, if it exists
     pub parent_id: Option<String>,
 
-    // The amount of time that has passed between the UNIX epoch and the moment the image was
-    // most recently used
+    // The amount of time that has passed between the UNIX epoch and the moment the image was most
+    // recently used
     pub last_used_since_epoch: Duration,
 }
 
@@ -36,8 +36,8 @@ fn path() -> Option<PathBuf> {
     dirs::data_local_dir()
         .or_else(|| {
             // In the `mcr.microsoft.com/windows/nanoserver` Docker image, `dirs::data_local_dir()`
-            // returns `None` (see https://github.com/dirs-dev/dirs-rs/issues/34 for details). So
-            // we fall back to the value of the `LOCALAPPDATA` environment variable in that case.
+            // returns `None` (see https://github.com/dirs-dev/dirs-rs/issues/34 for details). So we
+            // fall back to the value of the `LOCALAPPDATA` environment variable in that case.
             env::var("LOCALAPPDATA").ok().map(Into::into)
         })
         .map(|path| path.join("docuum/state.yml"))

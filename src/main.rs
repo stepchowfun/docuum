@@ -112,7 +112,7 @@ fn settings() -> io::Result<Settings> {
                 .long(KEEP_OPTION)
                 .multiple(true)
                 .number_of_values(1)
-                .help("Prevents deletion of repository:tag images that match the provided <REGEX>"),
+                .help("Prevents deletion of images for which repository:tag matches <REGEX>"),
         )
         .get_matches();
 
