@@ -118,6 +118,32 @@ docker run \
   stephanmisc/docuum --threshold '15 GB'
 ```
 
+### Running Docuum in a Docker container as a [systemd](https://www.freedesktop.org/wiki/Software/systemd/) service
+
+In [systemd](https://www.freedesktop.org/wiki/Software/systemd/) a `service` can be defined as a file like `/etc/systemd/system/docuum.service` with the following content:
+
+```properties
+[Unit]
+Description=Docuum
+After=docker.service
+Requires=docker.service
+
+[Service]
+Environment="DOCUUM_THRESHOLD=15 GB"
+ExecStart=/usr/bin/docker run \
+    --init \
+    --tty \
+    --rm \
+    --name docuum \
+    --volume /var/run/docker.sock:/var/run/docker.sock \
+    --volume docuum:/root \
+    stephanmisc/docuum \
+    --threshold ${DOCUUM_THRESHOLD}
+
+[Install]
+WantedBy=multi-user.target
+```
+
 ### Installation on macOS or Linux (x86-64)
 
 If you're running macOS or Linux on an x86-64 CPU, you can install Docuum with this command:
