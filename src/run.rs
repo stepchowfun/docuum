@@ -13,6 +13,7 @@ use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
     io::{self, BufRead, BufReader},
     mem::drop,
+    ops::Deref,
     process::{Command, Stdio},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -260,8 +261,9 @@ fn image_ids_in_use() -> io::Result<HashSet<String>> {
         // Query Docker for the image IDs for this chunk.
         let image_ids_output = Command::new("docker")
             .args(
-                vec!["container", "inspect", "--format", "{{.Image}}"]
-                    .into_iter()
+                ["container", "inspect", "--format", "{{.Image}}"]
+                    .iter()
+                    .map(Deref::deref)
                     .chain(chunk.iter().map(AsRef::as_ref)),
             )
             .stderr(Stdio::inherit())
