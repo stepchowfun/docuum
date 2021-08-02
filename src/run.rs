@@ -105,11 +105,16 @@ fn image_id(image: &str) -> io::Result<String> {
         .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
 }
 
-// Ask Docker for the ID of the parent of an image.
-fn parent_id(image: &str) -> io::Result<Option<String>> {
+// Get the ID of the parent of an image (if the parent exists), querying Docker if necessary.
+fn parent_id(state: &State, image_id: &str) -> io::Result<Option<String>> {
+    // If we already know the parent, just return it.
+    if let Some(image) = state.images.get(image_id) {
+        return Ok(image.parent_id.clone());
+    }
+
     // Query Docker for the parent image ID.
     let output = Command::new("docker")
-        .args(&["image", "inspect", "--format", "{{.Parent}}", image])
+        .args(&["image", "inspect", "--format", "{{.Parent}}", image_id])
         .stderr(Stdio::inherit())
         .output()?;
 
@@ -119,7 +124,7 @@ fn parent_id(image: &str) -> io::Result<Option<String>> {
             io::ErrorKind::Other,
             format!(
                 "Unable to determine ID of the parent of image {}.",
-                image.code_str(),
+                image_id.code_str(),
             ),
         ));
     }
@@ -187,11 +192,7 @@ fn list_image_records(state: &mut State) -> io::Result<HashMap<String, ImageReco
                 }
                 Entry::Vacant(entry) => {
                     entry.insert(ImageRecord {
-                        parent_id: if let Some(image) = state.images.get(id) {
-                            image.parent_id.clone()
-                        } else {
-                            parent_id(id)?
-                        },
+                        parent_id: parent_id(state, id)?,
                         created_since_epoch: parse_docker_date(date_str)?,
                         repository_tags: vec![repository_tag],
                     });
@@ -342,13 +343,6 @@ fn touch_image(state: &mut State, image_id: &str, verbose: bool) -> io::Result<(
         );
     }
 
-    // Find the parent of the image, either by looking it up in the state or by querying Docker.
-    let parent_id = if let Some(image) = state.images.get(image_id) {
-        image.parent_id.clone()
-    } else {
-        parent_id(image_id)?
-    };
-
     // Get the current timestamp.
     match SystemTime::now().duration_since(UNIX_EPOCH) {
         Ok(duration) => {
@@ -356,7 +350,7 @@ fn touch_image(state: &mut State, image_id: &str, verbose: bool) -> io::Result<(
             state.images.insert(
                 image_id.to_owned(),
                 state::Image {
-                    parent_id,
+                    parent_id: parent_id(state, image_id)?,
                     last_used_since_epoch: duration,
                 },
             );
