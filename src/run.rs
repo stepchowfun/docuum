@@ -17,6 +17,10 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+// When querying Docker for the image IDs corresponding to a list of container IDs, this is the
+// maximum number of container IDs to query at once.
+const CONTAINER_IDS_CHUNK_SIZE: usize = 100;
+
 // A Docker event (a line of output from `docker events --format '{{json .}}'`)
 #[derive(Deserialize, Serialize, Debug)]
 struct Event {
@@ -211,51 +215,88 @@ fn list_image_records(state: &mut State) -> io::Result<HashMap<String, ImageReco
 
 // Ask Docker for the IDs of the images currently in use by containers.
 fn image_ids_in_use() -> io::Result<HashSet<String>> {
-    // Query Docker for the image IDs.
-    let output = Command::new("docker")
+    // Query Docker for the container IDs.
+    let container_ids_output = Command::new("docker")
         .args(&[
             "container",
             "ls",
             "--all",
             "--no-trunc",
             "--format",
-            "{{.Image}}",
+            "{{.ID}}",
         ])
         .stderr(Stdio::inherit())
         .output()?;
 
     // Ensure the command succeeded.
-    if !output.status.success() {
+    if !container_ids_output.status.success() {
         return Err(io::Error::new(
             io::ErrorKind::Other,
             "Unable to determine IDs of images currently in use by containers.",
         ));
     }
 
-    // Interpret the output bytes as UTF-8 and collect the lines.
-    String::from_utf8(output.stdout)
+    // Interpret the output bytes as UTF-8 and parse the lines.
+    let container_ids = String::from_utf8(container_ids_output.stdout)
         .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
         .map(|output| {
             output
                 .lines()
                 .filter_map(|line| {
-                    if line.is_empty() {
+                    let trimmed_line = line.trim();
+
+                    if trimmed_line.is_empty() {
                         None
                     } else {
-                        match image_id(line.trim()) {
-                            Ok(the_image_id) => Some(the_image_id),
-                            Err(error) => {
-                                // This failure may happen if a container was created from an image
-                                // that no longer exists. This is non-fatal, so we just log the
-                                // error and continue.
-                                error!("{}", error);
-                                None
-                            }
-                        }
+                        Some(trimmed_line.to_owned())
                     }
                 })
-                .collect()
-        })
+                .collect::<Vec<_>>()
+        })?;
+
+    // Group the container IDs into chunks and query Docker for the image IDs for each chunk.
+    let mut image_ids = HashSet::new();
+    for chunk in container_ids.chunks(CONTAINER_IDS_CHUNK_SIZE) {
+        // Query Docker for the image IDs for this chunk.
+        let image_ids_output = Command::new("docker")
+            .args(
+                vec!["container", "inspect", "--format", "{{.Image}}"]
+                    .into_iter()
+                    .chain(chunk.iter().map(AsRef::as_ref)),
+            )
+            .stderr(Stdio::inherit())
+            .output()?;
+
+        // Ensure the command succeeded.
+        if !image_ids_output.status.success() {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Unable to determine IDs of images currently in use by containers.",
+            ));
+        }
+
+        // Interpret the output bytes as UTF-8 and parse the lines.
+        image_ids.extend(
+            String::from_utf8(image_ids_output.stdout)
+                .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
+                .map(|output| {
+                    output
+                        .lines()
+                        .filter_map(|line| {
+                            let trimmed_line = line.trim();
+
+                            if trimmed_line.is_empty() {
+                                None
+                            } else {
+                                Some(trimmed_line.to_owned())
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                })?,
+        );
+    }
+
+    Ok(image_ids)
 }
 
 // Get the total space used by Docker images.

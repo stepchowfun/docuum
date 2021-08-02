@@ -5,7 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.20.0] - 2021-07-15
+## [0.20.1] - 2021-08-02
+
+### Changed
+- Docuum now uses a more robust way to determine the images that are currently in use by containers.
+
+## [0.20.0] - 2021-08-02
 
 ### Added
 - Added the `--keep` flag to prevent Docuum from deleting certain images.
