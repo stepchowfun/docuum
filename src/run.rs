@@ -434,25 +434,27 @@ fn parse_docker_date(timestamp: &str) -> io::Result<Duration> {
 // Construct a polyforest of image nodes that reflects their parent-child relationships.
 fn construct_polyforest(
     state: &State,
+    first_run: bool,
     image_records: &HashMap<String, ImageRecord>,
     image_ids_in_use: &HashSet<String>,
 ) -> io::Result<HashMap<String, ImageNode>> {
+    // Compute the current timestamp.
+    let time_since_epoch = match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(duration) => Ok(duration),
+        Err(error) => Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!("Unable to compute the current timestamp: {:?}.", error),
+        )),
+    }?;
+
     // Construct the graph. It's a map, just like `image_records`, except the values are
     // `ImageNode`s rather than `ImageRecord`s. The majority of this code exists just to compute
     // the number of ancestors for each node.
     let mut polyforest = HashMap::new();
     for (image_id, image_record) in image_records {
-        // Find the ancestors of the current image, including the current image itself, excluding
-        // the root ancestor. The root will be added to the polyforest directly, and later we'll add
-        // the other ancestors as well. The first postcondition is that, for every image in this
-        // list except the final image, the parent is the subsequent image
-        // [tag:image_records_to_add_subsequent_is_parent]. The second postcondition is that the
-        // parent of the final image has already been added to the polyforest
-        // [tag:image_records_to_add_last_in_polyforest]. Together, these postconditions imply
-        // that every image in this list has a parent [tag:image_records_to_add_have_parents].
+        // Find the ancestors of the current image, including the current image itself.
         let mut image_ids_and_records_to_add = vec![];
         let mut image_id_and_record = (image_id.clone(), image_record.clone());
-
         loop {
             // Is the image already in the polyforest?
             if polyforest.contains_key(&image_id_and_record.0) {
@@ -460,72 +462,55 @@ fn construct_polyforest(
                 break;
             }
 
+            // Schedule the image for addition in the polyforest.
+            image_ids_and_records_to_add.push(image_id_and_record.clone());
+
             // Does the image have a parent?
             if let Some(parent_id) = &image_id_and_record.1.parent_id {
                 // The image has a parent, but does it actually exist?
                 if let Some(parent_image_record) = image_records.get(parent_id) {
-                    // It does. Add it to the list of images to add and continue.
-                    image_ids_and_records_to_add.push(image_id_and_record.clone());
+                    // It does. Advance to the parent and continue.
                     image_id_and_record = (parent_id.clone(), parent_image_record.clone());
                     continue;
                 }
             }
 
-            // The image is a root because either it has no parent or the parent doesn't exist.
-            // Compute the last used date.
-            let last_used_since_epoch = state
-                .images
-                .get(&image_id_and_record.0)
-                .map_or(image_id_and_record.1.created_since_epoch, |image| {
-                    image.last_used_since_epoch
-                });
-
-            // Add the root image to the polyforest and break.
-            polyforest.insert(
-                image_id_and_record.0.clone(),
-                ImageNode {
-                    image_record: image_id_and_record.1.clone(),
-                    last_used_since_epoch,
-                    ancestors: 0,
-                },
-            );
+            // If we made it this far, the image is a root.
             break;
         }
 
         // Add the ancestor images gathered above to the polyforest. We add them in order of
         // ancestor before descendant because we need to ensure the number of ancestors of the
         // parent has already been computed when computing that of the child.
-        // [ref:image_records_to_add_subsequent_is_parent]
         while let Some(image_id_and_record_to_add) = image_ids_and_records_to_add.pop() {
-            // Look up the parent image node. The first `unwrap` is safe due to
-            // [ref:image_records_to_add_have_parents]. The second `unwrap` is safe due to
-            // [ref:image_records_to_add_last_in_polyforest].
-            let parent_image_node = polyforest
-                .get(&image_id_and_record_to_add.1.parent_id.clone().unwrap())
-                .unwrap()
-                .clone();
-
             // Compute the last used date.
-            let mut last_used_since_epoch = state
-                .images
-                .get(&image_id_and_record_to_add.0)
-                .map_or(image_id_and_record_to_add.1.created_since_epoch, |image| {
-                    image.last_used_since_epoch
-                });
+            let mut last_used_since_epoch = state.images.get(&image_id_and_record_to_add.0).map_or(
+                if first_run {
+                    image_id_and_record_to_add.1.created_since_epoch
+                } else {
+                    time_since_epoch
+                },
+                |image| image.last_used_since_epoch,
+            );
 
             // If the image is in use by a container, update its timestamp.
             if image_ids_in_use.contains(&image_id_and_record_to_add.0) {
-                last_used_since_epoch = max(
-                    last_used_since_epoch,
-                    match SystemTime::now().duration_since(UNIX_EPOCH) {
-                        Ok(duration) => Ok(duration),
-                        Err(error) => Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            format!("Unable to compute the current timestamp: {:?}.", error),
-                        )),
-                    }?,
-                );
+                last_used_since_epoch = max(last_used_since_epoch, time_since_epoch);
             }
+
+            // Compute the number of ancestors.
+            let ancestors =
+                image_id_and_record_to_add
+                    .1
+                    .parent_id
+                    .as_ref()
+                    .map_or(0, |parent_id| {
+                        polyforest
+                            .get(parent_id)
+                            .map_or(0, |parent_image_node: &ImageNode| {
+                                parent_image_node.ancestors + 1
+                            })
+                    });
 
             // Add the image.
             polyforest.insert(
@@ -533,7 +518,7 @@ fn construct_polyforest(
                 ImageNode {
                     image_record: image_id_and_record_to_add.1.clone(),
                     last_used_since_epoch,
-                    ancestors: parent_image_node.ancestors + 1,
+                    ancestors,
                 },
             );
         }
@@ -577,15 +562,20 @@ fn construct_polyforest(
 }
 
 // The main vacuum logic
-fn vacuum(state: &mut State, threshold: Byte, keep: &Option<RegexSet>) -> io::Result<()> {
-    // Find all current images.
+fn vacuum(
+    state: &mut State,
+    first_run: bool,
+    threshold: Byte,
+    keep: &Option<RegexSet>,
+) -> io::Result<()> {
+    // Find all images.
     let image_records = list_image_records(state)?;
 
     // Find all images in use by containers.
     let image_ids_in_use = image_ids_in_use()?;
 
     // Construct a polyforest of image nodes that reflects their parent-child relationships.
-    let polyforest = construct_polyforest(state, &image_records, &image_ids_in_use)?;
+    let polyforest = construct_polyforest(state, first_run, &image_records, &image_ids_in_use)?;
 
     // Sort the images from least recently used to most recently used.
     // Break ties using the number of dependency layers.
@@ -628,7 +618,7 @@ fn vacuum(state: &mut State, threshold: Byte, keep: &Option<RegexSet>) -> io::Re
     let space = space_usage()?;
     if space > threshold {
         info!(
-            "Docker images are currently using {} but the limit is {}.",
+            "Docker images are currently using {}, but the limit is {}.",
             space.get_appropriate_unit(false).to_string().code_str(),
             threshold.get_appropriate_unit(false).to_string().code_str(),
         );
@@ -681,11 +671,12 @@ fn vacuum(state: &mut State, threshold: Byte, keep: &Option<RegexSet>) -> io::Re
 }
 
 // Stream Docker events and vacuum when necessary.
-pub fn run(settings: &Settings, state: &mut State) -> io::Result<()> {
+pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::Result<()> {
     // Run the main vacuum logic.
     info!("Performing an initial vacuum on startup\u{2026}");
-    vacuum(state, settings.threshold, &settings.keep)?;
+    vacuum(state, *first_run, settings.threshold, &settings.keep)?;
     state::save(&state)?;
+    *first_run = false;
 
     // Spawn `docker events --format '{{json .}}'`.
     let mut child = guard(
@@ -760,7 +751,7 @@ pub fn run(settings: &Settings, state: &mut State) -> io::Result<()> {
         touch_image(state, &image_id, true)?;
 
         // Run the main vacuum logic.
-        vacuum(state, settings.threshold, &settings.keep)?;
+        vacuum(state, *first_run, settings.threshold, &settings.keep)?;
 
         // Persist the state.
         state::save(&state)?;
@@ -794,7 +785,7 @@ mod tests {
 
         let image_records = HashMap::new();
         let image_ids_in_use = HashSet::new();
-        let image_graph = construct_polyforest(&state, &image_records, &image_ids_in_use)?;
+        let image_graph = construct_polyforest(&state, true, &image_records, &image_ids_in_use)?;
 
         assert_eq!(0, image_graph.len());
 
@@ -828,7 +819,7 @@ mod tests {
         let mut image_records = HashMap::new();
         image_records.insert(image_id.to_owned(), image_record.clone());
         let image_ids_in_use = HashSet::new();
-        let image_graph = construct_polyforest(&state, &image_records, &image_ids_in_use)?;
+        let image_graph = construct_polyforest(&state, true, &image_records, &image_ids_in_use)?;
 
         assert_eq!(1, image_graph.len());
 
@@ -862,7 +853,7 @@ mod tests {
         let mut image_records = HashMap::new();
         image_records.insert(image_id.to_owned(), image_record.clone());
         let image_ids_in_use = HashSet::new();
-        let image_graph = construct_polyforest(&state, &image_records, &image_ids_in_use)?;
+        let image_graph = construct_polyforest(&state, true, &image_records, &image_ids_in_use)?;
 
         assert_eq!(1, image_graph.len());
 
@@ -923,7 +914,7 @@ mod tests {
         image_records.insert(image_id_0.to_owned(), image_record_0.clone());
         image_records.insert(image_id_1.to_owned(), image_record_1.clone());
         let image_ids_in_use = HashSet::new();
-        let image_graph = construct_polyforest(&state, &image_records, &image_ids_in_use)?;
+        let image_graph = construct_polyforest(&state, true, &image_records, &image_ids_in_use)?;
 
         assert_eq!(2, image_graph.len());
 
@@ -993,7 +984,7 @@ mod tests {
         image_records.insert(image_id_0.to_owned(), image_record_0.clone());
         image_records.insert(image_id_1.to_owned(), image_record_1.clone());
         let image_ids_in_use = HashSet::new();
-        let image_graph = construct_polyforest(&state, &image_records, &image_ids_in_use)?;
+        let image_graph = construct_polyforest(&state, true, &image_records, &image_ids_in_use)?;
 
         assert_eq!(2, image_graph.len());
 
@@ -1081,7 +1072,7 @@ mod tests {
         image_records.insert(image_id_1.to_owned(), image_record_1.clone());
         image_records.insert(image_id_2.to_owned(), image_record_2.clone());
         let image_ids_in_use = HashSet::new();
-        let image_graph = construct_polyforest(&state, &image_records, &image_ids_in_use)?;
+        let image_graph = construct_polyforest(&state, true, &image_records, &image_ids_in_use)?;
 
         assert_eq!(3, image_graph.len());
 
@@ -1178,7 +1169,7 @@ mod tests {
         image_records.insert(image_id_1.to_owned(), image_record_1.clone());
         image_records.insert(image_id_2.to_owned(), image_record_2.clone());
         let image_ids_in_use = HashSet::new();
-        let image_graph = construct_polyforest(&state, &image_records, &image_ids_in_use)?;
+        let image_graph = construct_polyforest(&state, true, &image_records, &image_ids_in_use)?;
 
         assert_eq!(3, image_graph.len());
 
@@ -1275,7 +1266,7 @@ mod tests {
         image_records.insert(image_id_1.to_owned(), image_record_1.clone());
         image_records.insert(image_id_2.to_owned(), image_record_2.clone());
         let image_ids_in_use = HashSet::new();
-        let image_graph = construct_polyforest(&state, &image_records, &image_ids_in_use)?;
+        let image_graph = construct_polyforest(&state, true, &image_records, &image_ids_in_use)?;
 
         assert_eq!(3, image_graph.len());
 

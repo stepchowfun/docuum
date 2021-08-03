@@ -159,20 +159,23 @@ fn main() {
     };
 
     // Try to load the state from disk.
-    let mut state = state::load().unwrap_or_else(|error| {
-        // We couldn't load any state from disk. Log the error.
-        debug!(
-            "Unable to load state from disk. Proceeding with initial state. Details: {}",
-            error.to_string().code_str(),
-        );
+    let (mut state, mut first_run) = state::load().map_or_else(
+        |error| {
+            // We couldn't load any state from disk. Log the error.
+            debug!(
+                "Unable to load state from disk. Proceeding with initial state. Details: {}",
+                error.to_string().code_str(),
+            );
 
-        // Start with the initial state.
-        state::initial()
-    });
+            // Start with the initial state.
+            (state::initial(), true)
+        },
+        |state| (state, false),
+    );
 
     // Stream Docker events and vacuum when necessary. Restart if an error occurs.
     loop {
-        if let Err(e) = run(&settings, &mut state) {
+        if let Err(e) = run(&settings, &mut state, &mut first_run) {
             error!("{}", e);
             info!("Restarting\u{2026}");
             sleep(Duration::from_secs(1));

@@ -278,6 +278,13 @@ tasks:
       # Make Bash not silently ignore errors.
       set -euo pipefail
 
+      # This will be called when the task finishes, regardless of whether it succeeded.
+      function cleanup {
+        # Delete the container created below to run the integration tests.
+        docker rm --force dind
+      }
+      trap cleanup EXIT
+
       # Run the integration test suite [tag:integration_test_step]. We use a Docker-in-Docker
       # environment to run the suite because we don't want to inadvertently delete images from the
       # host machine.
@@ -290,7 +297,6 @@ tasks:
       docker cp "artifacts/docuum-x86_64-unknown-linux-musl" dind:/
       docker cp integration_test.sh dind:/
       docker exec dind ./integration_test.sh
-      docker rm --force dind
 
   publish:
     description: Publish the crate to crates.io.

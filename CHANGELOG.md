@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.2] - 2021-08-02
+
+### Fixed
+- Docuum now uses a smarter strategy for populating "last used" timestamps for unrecognized images, thanks to a suggestion by Mac Chaffee. Previously, Docuum would default to the image build timestamp when no last used timestamp for that image is known. However, that strategy can occasionally lead to situations in which Docuum would delete an image that was built a long time ago but only recently pulled locally, because Docuum could discover and delete the image before consuming the image pull event. Now, Docuum only defaults to the image build time the first time it runs on a machine, and thereafter it defaults to the current time.
+
 ## [0.20.1] - 2021-08-02
 
 ### Changed
