@@ -6,7 +6,7 @@
 
 Docker's built-in `docker image prune --all --filter until=…` command serves a similar purpose. However, the built-in solution isn't ideal since it uses the image creation time, rather than the last usage time, to determine which images to remove. That means it can delete frequently used images, which may be expensive to rebuild.
 
-Docuum is ideal for use cases such as continuous integration workers, developer workstations, or any other environment in which Docker images accumulate on disk over time. Docuum works well with tools like [Toast](https://github.com/stepchowfun/toast) and [Docker Compose](https://docs.docker.com/compose/).
+Docuum is ideal for use cases such as continuous integration (CI) workers, developer workstations, or any other environment in which Docker images accumulate on disk over time. Docuum works well with tools like [Toast](https://github.com/stepchowfun/toast) and [Docker Compose](https://docs.docker.com/compose/).
 
 Docuum is used by Airbnb on its fleet of 1.5k+ CI workers.
 
@@ -32,7 +32,7 @@ $ docuum --threshold '30 GB'
 
 Docuum will then start listening for Docker events. You can use `Ctrl`+`C` to stop it.
 
-You probably want to run Docuum as a [daemon](https://en.wikipedia.org/wiki/Daemon_\(computing\)), e.g., with [launchd](https://www.launchd.info/), [systemd](https://www.freedesktop.org/wiki/Software/systemd/), etc. See the [Configuring your operating system to run the binary as a service](#configuring-your-operating-system-to-run-the-binary-as-a-service) section below for instructions.
+You probably want to run Docuum as a [daemon](https://en.wikipedia.org/wiki/Daemon_\(computing\)), e.g., with [launchd](https://www.launchd.info/), [systemd](https://www.freedesktop.org/wiki/Software/systemd/), etc. See the [Configuring your operating system to run the binary as a daemon](#configuring-your-operating-system-to-run-the-binary-as-a-daemon) section below for instructions.
 
 Here are the supported command-line options:
 
@@ -61,7 +61,7 @@ The `--threshold` flag accepts [multiple representations](https://docs.rs/byte-u
 Installation consists of two steps:
 
 1. Installing the binary
-2. Configuring your operating system to run the binary as a service
+2. Configuring your operating system to run the binary as a daemon
 
 ### Installing the binary
 
@@ -119,9 +119,9 @@ docker run \
   stephanmisc/docuum --threshold '15 GB'
 ```
 
-### Configuring your operating system to run the binary as a service
+### Configuring your operating system to run the binary as a daemon
 
-You may consult your operating system documentation for instructions on how set up a service. Instructions are provided below for macOS and Linux.
+You may consult your operating system documentation for instructions on how set up a daemon. Instructions are provided below for macOS and Linux.
 
 #### Creating a [launchd](https://www.launchd.info/) service on macOS
 
@@ -157,7 +157,7 @@ Create a file (owned by root) called `/Library/LaunchDaemons/local.docuum.plist`
 </plist>
 ```
 
-Now Docuum will start automatically when you restart your machine, and the logs can be found at `/var/log/docuum.log`. If you do not wish to restart your machine, you can run `sudo launchctl load /Library/LaunchDaemons/local.docuum.plist` to start the daemon immediately.
+Run `sudo launchctl load /Library/LaunchDaemons/local.docuum.plist` to start the service. You can view the logs with `tail -F /var/log/docuum.log`.
 
 #### Creating a [systemd](https://www.freedesktop.org/wiki/Software/systemd/) service on Linux
 
@@ -191,7 +191,7 @@ ExecStart=/usr/bin/docker run \
   stephanmisc/docuum --threshold ${THRESHOLD}
 ```
 
-In either case, run `sudo systemctl enable docuum --now` to enable and start the service.
+Run `sudo systemctl enable docuum --now` to enable and start the service. You can view the logs with `sudo journalctl --follow --unit docuum`.
 
 ## Requirements
 
