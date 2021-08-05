@@ -119,9 +119,9 @@ docker run \
   stephanmisc/docuum --threshold '15 GB'
 ```
 
-### Configuring your operating system to run the binary as a daemon
+The instructions below for configuring your operating system to run Docuum as a daemon assume it's installed as a native binary using one of the other installation methods. If you prefer to run it as a Docker container, change the relevant service definition to run a Docker command like the one above.
 
-You may consult your operating system documentation for instructions on how set up a daemon. Instructions are provided below for macOS and Linux.
+### Configuring your operating system to run the binary as a daemon
 
 #### Creating a [launchd](https://www.launchd.info/) service on macOS
 
@@ -178,20 +178,28 @@ Restart=on-failure
 WantedBy=multi-user.target
 ```
 
-If you prefer not to install Docuum on your system and would rather run it as a Docker container, replace the `ExecStart` line with the following, adjusting the arguments as needed:
+Run `sudo systemctl enable docuum --now` to enable and start the service. You can view the logs with `sudo journalctl --follow --unit docuum`.
 
-```ini
-ExecStart=/usr/bin/docker run \
-  --init \
-  --rm \
-  --tty \
-  --name docuum \
-  --volume /var/run/docker.sock:/var/run/docker.sock \
-  --volume docuum:/root \
-  stephanmisc/docuum --threshold ${THRESHOLD}
+#### Creating an [NSSM](https://nssm.cc/) service on Windows
+
+NSSM, the "Non-Sucking Service Manager", can be used to run Docuum as a daemon. [Install NSSM](https://nssm.cc/download) by downloading the binary and adding it to your `PATH` (see the [Installation on Windows (x86-64)](#installation-on-windows-x86-64) section for instructions on how to configure this environment variable), then run Windows Terminal _as Administrator_ and enter the following command:
+
+```powershell
+nssm install docuum
 ```
 
-Run `sudo systemctl enable docuum --now` to enable and start the service. You can view the logs with `sudo journalctl --follow --unit docuum`.
+NSSM will then open a configuration window. Configure the following:
+
+- In the `Application` tab, select the path to the Docuum binary. You can optionally add arguments like `--threshold "15 GB"`.
+- Optionally, in the `I/O` tab, choose where you want the logs to be written.
+
+Then click the `Install service` button. Back in Windows Terminal, run the following to start the service:
+
+```powershell
+nssm start docuum
+```
+
+If you configured a path for the log file in the `I/O` tab of the installation window, you can view those logs with `Get-Content -Wait docuum.log` (adjusting the file path as needed).
 
 ## Requirements
 
