@@ -94,6 +94,16 @@ If you're running Windows on an x86-64 CPU, download the latest binary from the 
 
 To update to an existing installation, simply replace the existing binary.
 
+#### Installation with Homebrew
+
+If you have [Homebrew](https://brew.sh/), you can install Docuum as follows:
+
+```sh
+brew install docuum
+```
+
+You can update an existing installation with `brew upgrade docuum`.
+
 #### Installation with Cargo
 
 If you have [Cargo](https://doc.rust-lang.org/cargo/), you can install Docuum as follows:
