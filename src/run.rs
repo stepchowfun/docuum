@@ -672,8 +672,11 @@ fn vacuum(
 
 // Stream Docker events and vacuum when necessary.
 pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::Result<()> {
-    // Run the main vacuum logic.
+    // NOTE: Don't change this log line, since the test in the Homebrew formula
+    // (https://github.com/Homebrew/homebrew-core/blob/HEAD/Formula/docuum.rb) relies on it.
     info!("Performing an initial vacuum on startup\u{2026}");
+
+    // Run the main vacuum logic.
     vacuum(state, *first_run, settings.threshold, &settings.keep)?;
     state::save(&state)?;
     *first_run = false;
