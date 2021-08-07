@@ -27,7 +27,7 @@ Docuum also respects the parent-child relationships between images. In particula
 Once Docuum is [installed](#installation), you can run it manually from the command line as follows:
 
 ```sh
-$ docuum --threshold '30 GB'
+$ docuum --threshold '10 GB'
 ```
 
 Docuum will then start listening for Docker events. You can use `Ctrl`+`C` to stop it.
@@ -126,7 +126,7 @@ docker run \
   --name docuum \
   --volume /var/run/docker.sock:/var/run/docker.sock \
   --volume docuum:/root \
-  stephanmisc/docuum --threshold '15 GB'
+  stephanmisc/docuum --threshold '10 GB'
 ```
 
 The instructions below for configuring your operating system to run Docuum as a daemon assume it's installed as an executable binary. If you prefer to run it as a Docker container, change the relevant service definition to run a Docker command like the one above.
@@ -150,7 +150,7 @@ On macOS, [launchd](https://www.launchd.info/) can be used to run Docuum as a da
         <array>
             <string>/usr/local/bin/docuum</string>
             <string>--threshold</string>
-            <string>15 GB</string>
+            <string>10 GB</string>
         </array>
         <key>StandardOutPath</key>
         <string>/var/log/docuum.log</string>
@@ -180,7 +180,7 @@ After=docker.service
 Wants=docker.service
 
 [Service]
-Environment='THRESHOLD=15 GB'
+Environment='THRESHOLD=10 GB'
 ExecStart=/usr/local/bin/docuum --threshold ${THRESHOLD}
 Restart=on-failure
 
@@ -200,7 +200,7 @@ nssm install Docuum
 
 NSSM will then open a configuration window. Configure the following:
 
-- In the `Application` tab, select the path to the Docuum binary. You can optionally add arguments like `--threshold "15 GB"`.
+- In the `Application` tab, select the path to the Docuum binary. You can optionally add arguments like `--threshold "10 GB"`.
 - Optionally, in the `I/O` tab, choose where you want the logs to be written.
 
 Then click the `Install service` button. Back in Windows Terminal, run the following to start the service:
@@ -214,4 +214,4 @@ If you configured a path for the log file in the `I/O` tab of the installation w
 ## Requirements
 
 - Docuum requires [Docker Engine](https://www.docker.com/products/container-runtime) 17.03.0 or later.
-  - If you are using Docker Engine 18.09.0 or later with [BuildKit mode](https://docs.docker.com/develop/develop-images/build_enhancements/) enabled, Docker does not create intermediate images for each build step and instead uses a separate "build cache". Docuum will only clean up images, not the Buildkit build cache. BuildKit's built-in garbage collection feature can be used for the build cache (e.g., `docker builder prune --all --force --keep-storage '30 GB'`). If you are not using BuildKit mode, Docker's caching mechanism uses intermediate images, and Docuum will happily vacuum such images as usual.
+  - If you are using Docker Engine 18.09.0 or later with [BuildKit mode](https://docs.docker.com/develop/develop-images/build_enhancements/) enabled, Docker does not create intermediate images for each build step and instead uses a separate "build cache". Docuum will only clean up images, not the Buildkit build cache. BuildKit's built-in garbage collection feature can be used for the build cache (e.g., `docker builder prune --all --force --keep-storage '10 GB'`). If you are not using BuildKit mode, Docker's caching mechanism uses intermediate images, and Docuum will happily vacuum such images as usual.
