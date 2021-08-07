@@ -119,13 +119,13 @@ docker run \
   stephanmisc/docuum --threshold '15 GB'
 ```
 
-The instructions below for configuring your operating system to run Docuum as a daemon assume it's installed as a native binary using one of the other installation methods. If you prefer to run it as a Docker container, change the relevant service definition to run a Docker command like the one above.
+The instructions below for configuring your operating system to run Docuum as a daemon assume it's installed as an executable binary. If you prefer to run it as a Docker container, change the relevant service definition to run a Docker command like the one above.
 
 ### Configuring your operating system to run the binary as a daemon
 
-#### Creating a [launchd](https://www.launchd.info/) service on macOS
+#### Creating a launchd service on macOS
 
-Create a file (owned by root) called `/Library/LaunchDaemons/local.docuum.plist` with the following contents, adjusting the arguments as needed:
+On macOS, [launchd](https://www.launchd.info/) can be used to run Docuum as a daemon. Create a file (owned by root) called `/Library/LaunchDaemons/local.docuum.plist` with the following contents, adjusting the arguments as needed:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -159,9 +159,9 @@ Create a file (owned by root) called `/Library/LaunchDaemons/local.docuum.plist`
 
 Run `sudo launchctl load /Library/LaunchDaemons/local.docuum.plist` to start the service. You can view the logs with `tail -F /var/log/docuum.log`.
 
-#### Creating a [systemd](https://www.freedesktop.org/wiki/Software/systemd/) service on Linux
+#### Creating a systemd service on Linux
 
-Create a file (owned by root) called `/etc/systemd/system/docuum.service` with the following contents, adjusting the arguments as needed:
+On most Linux distributions, [systemd](https://www.freedesktop.org/wiki/Software/systemd/) can be used to run Docuum as a daemon. Create a file (owned by root) called `/etc/systemd/system/docuum.service` with the following contents, adjusting the arguments as needed:
 
 ```ini
 [Unit]
@@ -180,12 +180,12 @@ WantedBy=multi-user.target
 
 Run `sudo systemctl enable docuum --now` to enable and start the service. You can view the logs with `sudo journalctl --follow --unit docuum`.
 
-#### Creating an [NSSM](https://nssm.cc/) service on Windows
+#### Creating an NSSM service on Windows
 
-NSSM, the "Non-Sucking Service Manager", can be used to run Docuum as a daemon. [Install NSSM](https://nssm.cc/download) by downloading the binary and adding it to your `PATH` (see the [Installation on Windows (x86-64)](#installation-on-windows-x86-64) section for instructions on how to configure this environment variable), then run Windows Terminal _as Administrator_ and enter the following command:
+On Windows, [NSSM](https://nssm.cc/), the "Non-Sucking Service Manager", can be used to run Docuum as a daemon. [Install NSSM](https://nssm.cc/download) by downloading the binary and adding it to your `PATH` (see the [Installation on Windows (x86-64)](#installation-on-windows-x86-64) section for instructions on how to configure this environment variable), then run Windows Terminal _as Administrator_ and enter the following command:
 
 ```powershell
-nssm install docuum
+nssm install Docuum
 ```
 
 NSSM will then open a configuration window. Configure the following:
@@ -196,7 +196,7 @@ NSSM will then open a configuration window. Configure the following:
 Then click the `Install service` button. Back in Windows Terminal, run the following to start the service:
 
 ```powershell
-nssm start docuum
+nssm start Docuum
 ```
 
 If you configured a path for the log file in the `I/O` tab of the installation window, you can view those logs with `Get-Content -Wait docuum.log` (adjusting the file path as needed).
