@@ -20,7 +20,7 @@ DOCUUM_PID="$!"
 # several times at a 1 second interval.
 wait_for_docuum() {
   echo 'Waiting for Docuum to sleep…'
-  for _ in {0..4}; do
+  for _ in {0..7}; do
     sleep 1
     while [[ "$(awk '{ print $3 }' /proc/$DOCUUM_PID/stat)" != 'S' ]]; do
       sleep 1
