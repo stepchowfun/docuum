@@ -1,6 +1,6 @@
 [package]
 name = "docuum"
-version = "0.20.2"
+version = "0.20.3"
 authors = ["Stephan Boyer <stephan@stephanboyer.com>"]
 edition = "2018"
 description = "LRU eviction of Docker images."

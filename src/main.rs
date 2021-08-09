@@ -177,8 +177,8 @@ fn main() {
     loop {
         if let Err(e) = run(&settings, &mut state, &mut first_run) {
             error!("{}", e);
-            info!("Restarting\u{2026}");
-            sleep(Duration::from_secs(1));
+            info!("Retrying in 5 seconds\u{2026}");
+            sleep(Duration::from_secs(5));
         }
     }
 }
