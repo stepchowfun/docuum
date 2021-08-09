@@ -114,7 +114,7 @@ cargo install docuum
 
 You can run that command with `--force` to update an existing installation.
 
-#### Running Docuum in a Docker container on macOS or Linux (x86-64)
+#### Running Docuum in a Docker container on a host capable of running Linux containers
 
 If you prefer not to install Docuum on your system and you're running macOS or Linux on an x86-64 CPU, you can run it in a container:
 
@@ -129,7 +129,25 @@ docker run \
   stephanmisc/docuum --threshold '10 GB'
 ```
 
-The instructions below for configuring your operating system to run Docuum as a daemon assume it's installed as an executable binary. If you prefer to run it as a Docker container, change the relevant service definition to run a Docker command like the one above.
+If you're on a Windows system configured to run Linux containers, use this command:
+
+```powershell
+docker run `
+  --init `
+  --rm `
+  --tty `
+  --name docuum `
+  --volume //var/run/docker.sock:/var/run/docker.sock `
+  --volume docuum:/root `
+  stephanmisc/docuum --threshold '10 GB'
+```
+
+We don't currently publish a Windows-based image, because some Windows machines (namely, those which run containers with process isolation rather than Hyper-V) can only run Windows containers that were built for the exact build of Windows (e.g., 1809) which is running on the host. This makes Windows-based images less portable, and as a result we'd need to publish a separate Windows-based image for each build of Windows we want to support. At this time, we don't have the infrastructure to do that.
+
+The instructions below for configuring your operating system to run Docuum as a daemon assume it's installed as an executable binary. If you prefer to run it as a Docker container, change the relevant service definition to run a Docker command like the relevant one above, with the following adjustments:
+
+- Omit the `--tty` flag. This prevents Docuum from printing colored logs, which you probably don't want for a daemon.
+- Configure Docker as a hard dependency. Ordinarily, Docuum and Docker can be started in any order, and Docuum will patiently wait for Docker to start if needed. However, when running Docuum as a Docker container, then of course Docker must be started first.
 
 ### Configuring your operating system to run the binary as a daemon
 
