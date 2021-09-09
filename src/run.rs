@@ -324,7 +324,7 @@ fn space_usage() -> io::Result<Byte> {
         .and_then(|output| {
             for line in output.lines() {
                 // Parse the line as a space record.
-                if let Ok(space_record) = serde_json::from_str::<SpaceRecord>(&line) {
+                if let Ok(space_record) = serde_json::from_str::<SpaceRecord>(line) {
                     // Return early if we found the record we're looking for.
                     if space_record.r#type == "Images" {
                         return Byte::from_str(&space_record.size).map_err(|_| {
@@ -417,7 +417,7 @@ fn parse_docker_date(timestamp: &str) -> io::Result<Duration> {
 
     // Parse the date and convert it into a duration since the UNIX epoch.
     let duration =
-        match DateTime::parse_from_str(&timestamp_without_timezone_triad, "%Y-%m-%d %H:%M:%S %z") {
+        match DateTime::parse_from_str(timestamp_without_timezone_triad, "%Y-%m-%d %H:%M:%S %z") {
             Ok(datetime) => {
                 datetime.signed_duration_since::<chrono::offset::Utc>(DateTime::from(UNIX_EPOCH))
             }
@@ -626,7 +626,7 @@ fn vacuum(
         // Start deleting images, beginning with the least recently used.
         for (image_id, _) in sorted_image_nodes {
             // Delete the image.
-            if let Err(error) = delete_image(&image_id) {
+            if let Err(error) = delete_image(image_id) {
                 // The deletion failed. Just log the error and proceed.
                 error!("{}", error);
             } else {
@@ -678,7 +678,7 @@ pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::
 
     // Run the main vacuum logic.
     vacuum(state, *first_run, settings.threshold, &settings.keep)?;
-    state::save(&state)?;
+    state::save(state)?;
     *first_run = false;
 
     // Spawn `docker events --format '{{json .}}'`.
@@ -757,7 +757,7 @@ pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::
         vacuum(state, *first_run, settings.threshold, &settings.keep)?;
 
         // Persist the state.
-        state::save(&state)?;
+        state::save(state)?;
 
         // Inform the user that we're done for now.
         info!("Going back to sleep\u{2026}");
