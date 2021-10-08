@@ -24,7 +24,7 @@ Docuum also respects the parent-child relationships between images. In particula
 
 ## Usage
 
-Once Docuum is [installed](#installation), you can run it manually from the command line as follows:
+Once Docuum is [installed](#installation-instructions), you can run it manually from the command line as follows:
 
 ```sh
 $ docuum --threshold '10 GB'
@@ -56,7 +56,7 @@ OPTIONS:
 
 The `--threshold` flag accepts [multiple representations](https://docs.rs/byte-unit/4.0.12/byte_unit/struct.Byte.html#examples-2), like `10 GB`, `10 GiB`, or `10GB`.
 
-## Installation
+## Installation instructions
 
 Installation consists of two steps:
 
