@@ -1,21 +1,23 @@
-use crate::{
-    format::CodeStr,
-    state::{self, State},
-    Settings,
-};
-use byte_unit::Byte;
-use chrono::DateTime;
-use regex::RegexSet;
-use scopeguard::guard;
-use serde::{Deserialize, Serialize};
-use std::{
-    cmp::max,
-    collections::{hash_map::Entry, HashMap, HashSet},
-    io::{self, BufRead, BufReader},
-    mem::drop,
-    ops::Deref,
-    process::{Command, Stdio},
-    time::{Duration, SystemTime, UNIX_EPOCH},
+use {
+    crate::{
+        format::CodeStr,
+        state::{self, State},
+        Settings,
+    },
+    byte_unit::Byte,
+    chrono::DateTime,
+    regex::RegexSet,
+    scopeguard::guard,
+    serde::{Deserialize, Serialize},
+    std::{
+        cmp::max,
+        collections::{hash_map::Entry, HashMap, HashSet},
+        io::{self, BufRead, BufReader},
+        mem::drop,
+        ops::Deref,
+        process::{Command, Stdio},
+        time::{Duration, SystemTime, UNIX_EPOCH},
+    },
 };
 
 // When querying Docker for the image IDs corresponding to a list of container IDs, this is the
@@ -772,12 +774,14 @@ pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::
 
 #[cfg(test)]
 mod tests {
-    use super::{construct_polyforest, ImageNode, ImageRecord, RepositoryTag};
-    use crate::state::{self, State};
-    use std::{
-        collections::{HashMap, HashSet},
-        io,
-        time::Duration,
+    use {
+        super::{construct_polyforest, ImageNode, ImageRecord, RepositoryTag},
+        crate::state::{self, State},
+        std::{
+            collections::{HashMap, HashSet},
+            io,
+            time::Duration,
+        },
     };
 
     #[test]

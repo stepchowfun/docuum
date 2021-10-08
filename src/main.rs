@@ -4,21 +4,23 @@ mod format;
 mod run;
 mod state;
 
-use crate::{format::CodeStr, run::run};
-use atty::Stream;
-use byte_unit::Byte;
-use chrono::Local;
-use clap::{App, AppSettings, Arg};
-use env_logger::{fmt::Color, Builder};
-use log::{Level, LevelFilter};
-use regex::RegexSet;
-use std::{
-    env,
-    io::{self, Write},
-    process::exit,
-    str::FromStr,
-    thread::sleep,
-    time::Duration,
+use {
+    crate::{format::CodeStr, run::run},
+    atty::Stream,
+    byte_unit::Byte,
+    chrono::Local,
+    clap::{App, AppSettings, Arg},
+    env_logger::{fmt::Color, Builder},
+    log::{Level, LevelFilter},
+    regex::RegexSet,
+    std::{
+        env,
+        io::{self, Write},
+        process::exit,
+        str::FromStr,
+        thread::sleep,
+        time::Duration,
+    },
 };
 
 #[macro_use]
