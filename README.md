@@ -27,7 +27,7 @@ Docuum also respects the parent-child relationships between images. In particula
 Once Docuum is [installed](#installation-instructions), you can run it manually from the command line as follows:
 
 ```sh
-$ docuum --threshold '10 GB'
+docuum --threshold '10 GB'
 ```
 
 Docuum will then start listening for Docker events. You can use `Ctrl`+`C` to stop it.
