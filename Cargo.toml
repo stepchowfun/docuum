@@ -2,7 +2,7 @@
 name = "docuum"
 version = "0.20.3"
 authors = ["Stephan Boyer <stephan@stephanboyer.com>"]
-edition = "2018"
+edition = "2021"
 description = "LRU eviction of Docker images."
 license = "MIT"
 documentation = "https://github.com/stepchowfun/docuum"
