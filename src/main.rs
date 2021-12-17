@@ -68,7 +68,7 @@ fn set_up_logging() {
                 }
                 Level::Debug => {
                     style.set_color(Color::Blue);
-                },
+                }
                 Level::Trace => {
                     style.set_color(Color::Cyan);
                 }
