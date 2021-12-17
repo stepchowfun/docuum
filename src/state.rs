@@ -57,7 +57,7 @@ pub fn load() -> io::Result<State> {
     // Check if we have a path.
     if let Some(path) = path() {
         // Log what we are trying to do in case an error occurs.
-        debug!(
+        trace!(
             "Attempting to load the state from {}\u{2026}",
             path.to_string_lossy().code_str(),
         );
@@ -81,7 +81,7 @@ pub fn save(state: &State) -> io::Result<()> {
     // Check if we have a path.
     if let Some(path) = path() {
         // Log what we're trying to do in case an error occurs.
-        debug!(
+        trace!(
             "Persisting the state to {}\u{2026}",
             path.to_string_lossy().code_str(),
         );

@@ -382,7 +382,7 @@ fn touch_image(state: &mut State, image_id: &str, verbose: bool) -> io::Result<(
             image_id.code_str(),
         );
     } else {
-        debug!(
+        trace!(
             "Updating last-used timestamp for image {}\u{2026}",
             image_id.code_str(),
         );
@@ -711,16 +711,16 @@ pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::
     for line_option in reader.lines() {
         // Unwrap the line.
         let line = line_option?;
-        debug!("Incoming event: {}", line.code_str());
+        trace!("Incoming event: {}", line.code_str());
 
         // Parse the line as an event.
         let event = match serde_json::from_str::<Event>(&line) {
             Ok(event) => {
-                debug!("Parsed as: {}", format!("{:?}", event).code_str());
+                trace!("Parsed as: {}", format!("{:?}", event).code_str());
                 event
             }
             Err(error) => {
-                debug!("Skipping due to: {}", error);
+                trace!("Skipping due to: {}", error);
                 continue;
             }
         };
@@ -732,7 +732,7 @@ pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::
             if let Some(image_name) = event.actor.attributes.image {
                 image_name
             } else {
-                debug!("Invalid Docker event.");
+                trace!("Invalid Docker event.");
                 continue;
             }
         } else if event.r#type == "image"
@@ -745,7 +745,7 @@ pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::
         {
             event.id
         } else {
-            debug!("Skipping due to irrelevance.");
+            trace!("Skipping due to irrelevance.");
             continue;
         })?;
 

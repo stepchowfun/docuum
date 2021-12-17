@@ -164,7 +164,7 @@ fn main() {
     let (mut state, mut first_run) = state::load().map_or_else(
         |error| {
             // We couldn't load any state from disk. Log the error.
-            debug!(
+            trace!(
                 "Unable to load state from disk. Proceeding with initial state. Details: {}",
                 error.to_string().code_str(),
             );
