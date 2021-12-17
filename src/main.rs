@@ -30,7 +30,7 @@ extern crate log;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 // Defaults
-const DEFAULT_LOG_LEVEL: LevelFilter = LevelFilter::Info;
+const DEFAULT_LOG_LEVEL: LevelFilter = LevelFilter::Debug;
 const DEFAULT_THRESHOLD: &str = "10 GB";
 
 // Command-line argument and option names

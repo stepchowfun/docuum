@@ -377,7 +377,7 @@ fn delete_image(image: &str) -> io::Result<()> {
 // Update the timestamp for an image.
 fn touch_image(state: &mut State, image_id: &str, verbose: bool) -> io::Result<()> {
     if verbose {
-        info!(
+        debug!(
             "Updating last-used timestamp for image {}\u{2026}",
             image_id.code_str(),
         );
@@ -600,7 +600,7 @@ fn vacuum(
                         repository_tag.repository,
                         repository_tag.tag,
                     )) {
-                        info!(
+                        debug!(
                             "Ignored image {} due to the {} flag.",
                             format!("{}:{}", repository_tag.repository, repository_tag.tag)
                                 .code_str(),
@@ -648,7 +648,7 @@ fn vacuum(
             }
         }
     } else {
-        info!(
+        debug!(
             "Docker images are using {}, which is within the limit of {}.",
             space.get_appropriate_unit(false).to_string().code_str(),
             threshold.get_appropriate_unit(false).to_string().code_str(),
@@ -750,7 +750,7 @@ pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::
         })?;
 
         // Inform the user that we're about to vacuum.
-        info!("Waking up\u{2026}");
+        debug!("Waking up\u{2026}");
 
         // Update the timestamp for this image.
         touch_image(state, &image_id, true)?;
@@ -762,7 +762,7 @@ pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::
         state::save(state)?;
 
         // Inform the user that we're done for now.
-        info!("Going back to sleep\u{2026}");
+        debug!("Going back to sleep\u{2026}");
     }
 
     // The `for` loop above will only terminate if something happened to `docker events`.
