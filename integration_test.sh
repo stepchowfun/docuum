@@ -11,7 +11,7 @@ done
 
 # Start Docuum in the background.
 echo 'Starting Docuum…'
-LOG_LEVEL=debug /docuum-x86_64-unknown-linux-musl --threshold '14 MB' --keep 'alpine:keep' &
+LOG_LEVEL=trace /docuum-x86_64-unknown-linux-musl --threshold '14 MB' --keep 'alpine:keep' &
 DOCUUM_PID="$!"
 
 # This function waits for Docuum to start sleeping by checking the process state. The process could
