@@ -56,6 +56,8 @@ OPTIONS:
 
 The `--threshold` flag accepts [multiple representations](https://docs.rs/byte-unit/4.0.12/byte_unit/struct.Byte.html#examples-2), like `10 GB`, `10 GiB`, or `10GB`.
 
+You can change the log level of Docuum by setting the environment variable `LOG_LEVEL` to one of the supported values `trace`, `debug`, `info`, `warning` or `error`. The default log level is `debug`.
+
 ## Installation instructions
 
 Installation consists of two steps:

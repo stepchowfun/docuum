@@ -30,7 +30,7 @@ extern crate log;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 // Defaults
-const DEFAULT_LOG_LEVEL: LevelFilter = LevelFilter::Info;
+const DEFAULT_LOG_LEVEL: LevelFilter = LevelFilter::Debug;
 const DEFAULT_THRESHOLD: &str = "10 GB";
 
 // Command-line argument and option names
@@ -66,8 +66,11 @@ fn set_up_logging() {
                 Level::Info => {
                     style.set_color(Color::Green);
                 }
-                Level::Debug | Level::Trace => {
+                Level::Debug => {
                     style.set_color(Color::Blue);
+                }
+                Level::Trace => {
+                    style.set_color(Color::Cyan);
                 }
             }
 
@@ -164,7 +167,7 @@ fn main() {
     let (mut state, mut first_run) = state::load().map_or_else(
         |error| {
             // We couldn't load any state from disk. Log the error.
-            debug!(
+            warn!(
                 "Unable to load state from disk. Proceeding with initial state. Details: {}",
                 error.to_string().code_str(),
             );
