@@ -79,10 +79,10 @@ fn set_up_logging() {
                 "{} {}",
                 style.value(format!(
                     "[{} {}]",
-                    Local::now().format("%Y-%m-%d %H:%M:%S %:z").to_string(),
+                    Local::now().format("%Y-%m-%d %H:%M:%S %:z"),
                     record.level(),
                 )),
-                record.args().to_string(),
+                record.args(),
             )
         })
         .init();
