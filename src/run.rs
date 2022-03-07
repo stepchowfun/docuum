@@ -426,11 +426,10 @@ fn parse_docker_date(timestamp: &str) -> io::Result<Duration> {
             Err(error) => return Err(io::Error::new(io::ErrorKind::Other, error)),
         };
 
-    // Convert the duration into a `std::time::Duration`.
-    match duration.to_std() {
-        Ok(duration) => Ok(duration),
-        Err(error) => Err(io::Error::new(io::ErrorKind::Other, error)),
-    }
+    // Convert the duration into a `std::time::Duration`. If the duration is negative, it will be
+    // clamped to zero. This can occur when building images with `kaniko --reproducible`, as the
+    // resulting images have `0001-01-01 00:00:00 +0000 UTC` for their creation timestamp.
+    Ok(duration.to_std().unwrap_or(Duration::ZERO))
 }
 
 // Construct a polyforest of image nodes that reflects their parent-child relationships.
@@ -775,7 +774,7 @@ pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::
 #[cfg(test)]
 mod tests {
     use {
-        super::{construct_polyforest, ImageNode, ImageRecord, RepositoryTag},
+        super::{construct_polyforest, parse_docker_date, ImageNode, ImageRecord, RepositoryTag},
         crate::state::{self, State},
         std::{
             collections::{HashMap, HashSet},
@@ -783,6 +782,27 @@ mod tests {
             time::Duration,
         },
     };
+
+    #[test]
+    fn parse_docker_date_valid() {
+        assert_eq!(
+            parse_docker_date("2022-02-25 12:53:30 -0800 PST").unwrap(),
+            Duration::from_secs(1_645_822_410),
+        );
+    }
+
+    #[test]
+    fn parse_docker_date_before_unix_epoch() {
+        assert_eq!(
+            parse_docker_date("0001-01-01 00:00:00 +0000 UTC").unwrap(),
+            Duration::ZERO,
+        );
+    }
+
+    #[test]
+    fn parse_docker_date_invalid() {
+        assert!(parse_docker_date("invalid").is_err());
+    }
 
     #[test]
     fn construct_polyforest_empty() -> io::Result<()> {
