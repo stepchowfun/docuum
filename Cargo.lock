@@ -120,7 +120,7 @@ dependencies = [
 
 [[package]]
 name = "docuum"
-version = "0.20.4"
+version = "0.20.5"
 dependencies = [
  "atty",
  "byte-unit",
