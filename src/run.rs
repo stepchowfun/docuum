@@ -2,7 +2,7 @@ use {
     crate::{
         format::CodeStr,
         state::{self, State},
-        Settings,
+        Settings, Threshold,
     },
     byte_unit::Byte,
     chrono::DateTime,
@@ -303,6 +303,78 @@ fn image_ids_in_use() -> io::Result<HashSet<String>> {
     Ok(image_ids)
 }
 
+// Find docker root directory.
+fn docker_root_dir() -> io::Result<String> {
+    // Query Docker for the root directory.
+    let output = Command::new("docker")
+        .args(&["info", "--format", "{{.DockerRootDir}}"])
+        .stderr(Stdio::inherit())
+        .output()?;
+
+    // Ensure the command succeeded.
+    if !output.status.success() {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "Unable to determine the Docker root directory.",
+        ));
+    }
+
+    // Find the relevant line of output.
+    String::from_utf8(output.stdout)
+        .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
+        .map(|s| s.trim().to_string())
+}
+
+// Find size of filesystem on which docker root directory is stored.
+fn docker_root_dir_filesystem_size() -> io::Result<Byte> {
+    let root_dir = docker_root_dir()?;
+
+    let output = Command::new("df")
+        .args(&["-B", "1", &root_dir])
+        .stderr(Stdio::inherit())
+        .output()?;
+
+    // Ensure the command succeeded.
+    if !output.status.success() {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "Unable to determine the free disk space.",
+        ));
+    }
+
+    String::from_utf8(output.stdout)
+        // Handle UTF8 error
+        .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
+        // Extract second line
+        .and_then(|output| {
+            output
+                .lines()
+                .nth(1)
+                .map(|s| s.to_string())
+                .ok_or(io::Error::new(
+                    io::ErrorKind::Other,
+                    "df output format not as expected: No second line.",
+                ))
+        })
+        // Extract second column
+        .and_then(|l| {
+            l.split_whitespace()
+                .nth(1)
+                .map(|s| s.to_string())
+                .ok_or(io::Error::new(
+                    io::ErrorKind::Other,
+                    "df output format not as expected: No second column.",
+                ))
+        })
+        // Parse integer
+        .and_then(|s| {
+            s.parse::<u128>()
+                .map_err(|_| io::Error::new(io::ErrorKind::Other, "Error parsing filesystem size."))
+        })
+        // Convert to bytes
+        .and_then(|i| Ok(Byte::from_bytes(i)))
+}
+
 // Get the total space used by Docker images.
 #[allow(clippy::map_err_ignore)]
 fn space_usage() -> io::Result<Byte> {
@@ -566,7 +638,7 @@ fn construct_polyforest(
 fn vacuum(
     state: &mut State,
     first_run: bool,
-    threshold: Byte,
+    threshold: Threshold,
     keep: &Option<RegexSet>,
 ) -> io::Result<()> {
     // Find all images.
@@ -596,8 +668,7 @@ fn vacuum(
                 for repository_tag in &image_node.image_record.repository_tags {
                     if regex_set.is_match(&format!(
                         "{}:{}",
-                        repository_tag.repository,
-                        repository_tag.tag,
+                        repository_tag.repository, repository_tag.tag,
                     )) {
                         debug!(
                             "Ignored image {} due to the {} flag.",
@@ -613,6 +684,14 @@ fn vacuum(
             })
             .collect();
     }
+
+    // Determine threshold in bytes.
+    let threshold: Byte = match threshold {
+        Threshold::Absolute(b) => b,
+        Threshold::Percentage(p) => {
+            Byte::from_bytes((p * docker_root_dir_filesystem_size()?.get_bytes() as f64) as u128)
+        }
+    };
 
     // Check if we're over the threshold.
     let mut deleted_image_ids = HashSet::new();
