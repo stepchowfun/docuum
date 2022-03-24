@@ -18,6 +18,7 @@ use {
         process::{Command, Stdio},
         time::{Duration, SystemTime, UNIX_EPOCH},
     },
+    sysinfo::{Disk, DiskExt, System, SystemExt},
 };
 
 // When querying Docker for the image IDs corresponding to a list of container IDs, this is the
@@ -325,54 +326,40 @@ fn docker_root_dir() -> io::Result<String> {
         .map(|s| s.trim().to_string())
 }
 
+fn prefix_match_len(s1: &str, s2: &str) -> i32 {
+    let size = std::cmp::min(s1.len(), s2.len());
+    let mut matching_len = 0;
+    for i in 0..size {
+        if s1.chars().nth(i) == s2.chars().nth(i) {
+            matching_len += 1;
+        } else {
+            break;
+        }
+    }
+    return matching_len;
+}
+
+fn get_disk_by_file<'a>(disks: &'a [Disk], path: &str) -> &'a Disk {
+    let mut longest_match_index: usize = 0;
+    let mut longest_match = 0;
+    for (i, disk) in disks.iter().enumerate() {
+        let n = prefix_match_len(disk.mount_point().to_str().unwrap_or(""), path);
+        if n > longest_match {
+            longest_match = n;
+            longest_match_index = i;
+        }
+    }
+
+    &disks[longest_match_index]
+}
+
 // Find size of filesystem on which docker root directory is stored.
 fn docker_root_dir_filesystem_size() -> io::Result<Byte> {
     let root_dir = docker_root_dir()?;
-
-    let output = Command::new("df")
-        .args(&["-B", "1", &root_dir])
-        .stderr(Stdio::inherit())
-        .output()?;
-
-    // Ensure the command succeeded.
-    if !output.status.success() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Unable to determine the free disk space.",
-        ));
-    }
-
-    String::from_utf8(output.stdout)
-        // Handle UTF8 error
-        .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
-        // Extract second line
-        .and_then(|output| {
-            output
-                .lines()
-                .nth(1)
-                .map(|s| s.to_string())
-                .ok_or(io::Error::new(
-                    io::ErrorKind::Other,
-                    "df output format not as expected: No second line.",
-                ))
-        })
-        // Extract second column
-        .and_then(|l| {
-            l.split_whitespace()
-                .nth(1)
-                .map(|s| s.to_string())
-                .ok_or(io::Error::new(
-                    io::ErrorKind::Other,
-                    "df output format not as expected: No second column.",
-                ))
-        })
-        // Parse integer
-        .and_then(|s| {
-            s.parse::<u128>()
-                .map_err(|_| io::Error::new(io::ErrorKind::Other, "Error parsing filesystem size."))
-        })
-        // Convert to bytes
-        .and_then(|i| Ok(Byte::from_bytes(i)))
+    let sys = System::new_all();
+    let disks = sys.disks();
+    let disk = get_disk_by_file(disks, &root_dir);
+    Ok(Byte::from_bytes(disk.total_space() as u128))
 }
 
 // Get the total space used by Docker images.
