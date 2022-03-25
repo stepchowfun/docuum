@@ -333,7 +333,7 @@ fn prefix_match_len(s1: &str, s2: &str) -> usize {
     while matching_len < size && s1.chars().nth(matching_len) == s2.chars().nth(matching_len) {
         matching_len += 1;
     }
-    return matching_len;
+    matching_len
 }
 
 // Find the disk a file is on by longest prefix match of filepath and mountpoint.
@@ -344,10 +344,12 @@ fn get_disk_by_file<'a>(disks: &'a [Disk], path: &str) -> io::Result<&'a Disk> {
         .filter(|d| path.starts_with(d.mount_point().to_string_lossy().as_ref()))
         // Choose disk with longest path-prefix
         .max_by_key(|d| prefix_match_len(d.mount_point().to_str().unwrap_or(""), path))
-        .ok_or(io::Error::new(
-            io::ErrorKind::Other,
-            "Unable to determine the disk space used by Docker images.",
-        ))
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("Unable to find disk for path {}.", path),
+            )
+        })
 }
 
 // Find size of filesystem on which docker root directory is stored.
@@ -356,7 +358,7 @@ fn docker_root_dir_filesystem_size() -> io::Result<Byte> {
     let sys = System::new_with_specifics(RefreshKind::new().with_disks_list());
     let disks = sys.disks();
     let disk = get_disk_by_file(disks, &root_dir)?;
-    Ok(Byte::from_bytes(disk.total_space() as u128))
+    Ok(Byte::from_bytes(u128::from(disk.total_space())))
 }
 
 // Get the total space used by Docker images.
@@ -731,7 +733,13 @@ pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::
     // Determine threshold in bytes.
     let threshold: Byte = match settings.threshold {
         Threshold::Absolute(b) => b,
-        Threshold::Percentage(p) => {
+        Threshold::Percentage(p) =>
+        {
+            #[allow(
+                clippy::cast_precision_loss,
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss
+            )]
             Byte::from_bytes((p * docker_root_dir_filesystem_size()?.get_bytes() as f64) as u128)
         }
     };

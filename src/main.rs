@@ -132,7 +132,7 @@ fn settings() -> io::Result<Settings> {
     let default_threshold = Threshold::Absolute(Byte::from_str(DEFAULT_THRESHOLD).unwrap()); // Manually verified safe
     let threshold = matches.value_of(THRESHOLD_OPTION).map_or_else(
         || Ok(default_threshold),
-        |threshold| match threshold.strip_suffix("%") {
+        |threshold| match threshold.strip_suffix('%') {
             Some(threshold_percentage_string) => {
                 // Threshold parameter has "%" suffix: Try parsing as f64
                 threshold_percentage_string
@@ -158,7 +158,7 @@ fn settings() -> io::Result<Settings> {
                         format!("Invalid threshold {}.", threshold.code_str()),
                     )
                 })
-                .map(|b| Threshold::Absolute(b)),
+                .map(Threshold::Absolute),
         },
     )?;
 
