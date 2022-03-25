@@ -18,7 +18,7 @@ use {
         process::{Command, Stdio},
         time::{Duration, SystemTime, UNIX_EPOCH},
     },
-    sysinfo::{Disk, DiskExt, System, SystemExt},
+    sysinfo::{Disk, DiskExt, RefreshKind, System, SystemExt},
 };
 
 // When querying Docker for the image IDs corresponding to a list of container IDs, this is the
@@ -356,7 +356,7 @@ fn get_disk_by_file<'a>(disks: &'a [Disk], path: &str) -> &'a Disk {
 // Find size of filesystem on which docker root directory is stored.
 fn docker_root_dir_filesystem_size() -> io::Result<Byte> {
     let root_dir = docker_root_dir()?;
-    let sys = System::new_all();
+    let sys = System::new_with_specifics(RefreshKind::new().with_disks_list());
     let disks = sys.disks();
     let disk = get_disk_by_file(disks, &root_dir);
     Ok(Byte::from_bytes(disk.total_space() as u128))
@@ -625,7 +625,7 @@ fn construct_polyforest(
 fn vacuum(
     state: &mut State,
     first_run: bool,
-    threshold: Threshold,
+    threshold: Byte,
     keep: &Option<RegexSet>,
 ) -> io::Result<()> {
     // Find all images.
@@ -671,14 +671,6 @@ fn vacuum(
             })
             .collect();
     }
-
-    // Determine threshold in bytes.
-    let threshold: Byte = match threshold {
-        Threshold::Absolute(b) => b,
-        Threshold::Percentage(p) => {
-            Byte::from_bytes((p * docker_root_dir_filesystem_size()?.get_bytes() as f64) as u128)
-        }
-    };
 
     // Check if we're over the threshold.
     let mut deleted_image_ids = HashSet::new();
@@ -739,12 +731,20 @@ fn vacuum(
 
 // Stream Docker events and vacuum when necessary.
 pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::Result<()> {
+    // Determine threshold in bytes.
+    let threshold: Byte = match settings.threshold {
+        Threshold::Absolute(b) => b,
+        Threshold::Percentage(p) => {
+            Byte::from_bytes((p * docker_root_dir_filesystem_size()?.get_bytes() as f64) as u128)
+        }
+    };
+
     // NOTE: Don't change this log line, since the test in the Homebrew formula
     // (https://github.com/Homebrew/homebrew-core/blob/HEAD/Formula/docuum.rb) relies on it.
     info!("Performing an initial vacuum on startup\u{2026}");
 
     // Run the main vacuum logic.
-    vacuum(state, *first_run, settings.threshold, &settings.keep)?;
+    vacuum(state, *first_run, threshold, &settings.keep)?;
     state::save(state)?;
     *first_run = false;
 
@@ -821,7 +821,7 @@ pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::
         touch_image(state, &image_id, true)?;
 
         // Run the main vacuum logic.
-        vacuum(state, *first_run, settings.threshold, &settings.keep)?;
+        vacuum(state, *first_run, threshold, &settings.keep)?;
 
         // Persist the state.
         state::save(state)?;
