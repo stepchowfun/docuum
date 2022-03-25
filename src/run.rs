@@ -326,31 +326,28 @@ fn docker_root_dir() -> io::Result<String> {
         .map(|s| s.trim().to_string())
 }
 
-fn prefix_match_len(s1: &str, s2: &str) -> i32 {
+// Get number of matching characters at the start of two strings.
+fn prefix_match_len(s1: &str, s2: &str) -> usize {
     let size = std::cmp::min(s1.len(), s2.len());
     let mut matching_len = 0;
-    for i in 0..size {
-        if s1.chars().nth(i) == s2.chars().nth(i) {
-            matching_len += 1;
-        } else {
-            break;
-        }
+    while matching_len < size && s1.chars().nth(matching_len) == s2.chars().nth(matching_len) {
+        matching_len += 1;
     }
     return matching_len;
 }
 
-fn get_disk_by_file<'a>(disks: &'a [Disk], path: &str) -> &'a Disk {
-    let mut longest_match_index: usize = 0;
-    let mut longest_match = 0;
-    for (i, disk) in disks.iter().enumerate() {
-        let n = prefix_match_len(disk.mount_point().to_str().unwrap_or(""), path);
-        if n > longest_match {
-            longest_match = n;
-            longest_match_index = i;
-        }
-    }
-
-    &disks[longest_match_index]
+// Find the disk a file is on by longest prefix match of filepath and mountpoint.
+fn get_disk_by_file<'a>(disks: &'a [Disk], path: &str) -> io::Result<&'a Disk> {
+    disks
+        .iter()
+        // Only consider disks with mountpoint that is prefix of path
+        .filter(|d| path.starts_with(d.mount_point().to_string_lossy().as_ref()))
+        // Choose disk with longest path-prefix
+        .max_by_key(|d| prefix_match_len(d.mount_point().to_str().unwrap_or(""), path))
+        .ok_or(io::Error::new(
+            io::ErrorKind::Other,
+            "Unable to determine the disk space used by Docker images.",
+        ))
 }
 
 // Find size of filesystem on which docker root directory is stored.
@@ -358,7 +355,7 @@ fn docker_root_dir_filesystem_size() -> io::Result<Byte> {
     let root_dir = docker_root_dir()?;
     let sys = System::new_with_specifics(RefreshKind::new().with_disks_list());
     let disks = sys.disks();
-    let disk = get_disk_by_file(disks, &root_dir);
+    let disk = get_disk_by_file(disks, &root_dir)?;
     Ok(Byte::from_bytes(disk.total_space() as u128))
 }
 
