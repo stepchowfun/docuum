@@ -129,7 +129,9 @@ fn settings() -> io::Result<Settings> {
         .get_matches();
 
     // Read the threshold.
-    let default_threshold = Threshold::Absolute(Byte::from_str(DEFAULT_THRESHOLD).unwrap()); // Manually verified safe
+    let default_threshold = Threshold::Absolute(
+        Byte::from_str(DEFAULT_THRESHOLD).unwrap(), /*  Manually verified safe */
+    );
     let threshold = matches.value_of(THRESHOLD_OPTION).map_or_else(
         || Ok(default_threshold),
         |threshold| match threshold.strip_suffix('%') {
@@ -144,7 +146,7 @@ fn settings() -> io::Result<Settings> {
                             format!(
                                 "Invalid relative threshold {}. Error: {}",
                                 threshold.code_str(),
-                                parse_error
+                                parse_error,
                             ),
                         )
                     })
