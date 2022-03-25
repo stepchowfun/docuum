@@ -132,31 +132,33 @@ fn settings() -> io::Result<Settings> {
     let default_threshold = Threshold::Absolute(Byte::from_str(DEFAULT_THRESHOLD).unwrap()); // Manually verified safe
     let threshold = matches.value_of(THRESHOLD_OPTION).map_or_else(
         || Ok(default_threshold),
-        |threshold| {
-            if threshold.ends_with("%") {
-                match threshold.strip_suffix("%").unwrap().trim().parse::<f64>() {
-                    Err(e) => {
-                        return Err(io::Error::new(
+        |threshold| match threshold.strip_suffix("%") {
+            Some(threshold_percentage_string) => {
+                // Threshold parameter has "%" suffix: Try parsing as f64
+                threshold_percentage_string
+                    .trim()
+                    .parse::<f64>()
+                    .map_err(|parse_error| {
+                        io::Error::new(
                             io::ErrorKind::InvalidInput,
                             format!(
                                 "Invalid relative threshold {}. Error: {}",
                                 threshold.code_str(),
-                                e
+                                parse_error
                             ),
-                        ))
-                    }
-                    Ok(f) => return Ok(Threshold::Percentage(f / 100.0)),
-                }
+                        )
+                    })
+                    .map(|f| Threshold::Percentage(f / 100.0))
             }
-
-            Byte::from_str(threshold)
+            None => Byte::from_str(threshold)
+                // Threshold parameter does not have "%" suffix: Try parsing as Byte
                 .map_err(|_| {
                     io::Error::new(
                         io::ErrorKind::InvalidInput,
                         format!("Invalid threshold {}.", threshold.code_str()),
                     )
                 })
-                .map(|b| Threshold::Absolute(b))
+                .map(|b| Threshold::Absolute(b)),
         },
     )?;
 
