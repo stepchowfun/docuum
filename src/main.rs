@@ -138,26 +138,34 @@ fn settings() -> io::Result<Settings> {
             Some(threshold_percentage_string) => {
                 // Threshold parameter has "%" suffix: Try parsing as f64
                 threshold_percentage_string
-                    .trim()
-                    .parse::<f64>()
-                    .map_err(|parse_error| {
-                        io::Error::new(
+                .trim()
+                .parse::<f64>()
+                // Handle parsing error
+                .map_err(|_| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        format!("Invalid relative threshold {}.", threshold.code_str()),
+                    )
+                })
+                // Assert range of relative threshold
+                .and_then(|f| {
+                    if f.is_normal() && 0.0 <= f && f <= 100.0 {
+                        Ok(f)
+                    } else {
+                        Err(io::Error::new(
                             io::ErrorKind::InvalidInput,
-                            format!(
-                                "Invalid relative threshold {}. Error: {}",
-                                threshold.code_str(),
-                                parse_error,
-                            ),
-                        )
-                    })
-                    .map(|f| Threshold::Percentage(f / 100.0))
+                            format!("Invalid relative threshold {}.", threshold.code_str()),
+                        ))
+                    }
+                })
+                .and_then(|f| Ok(Threshold::Percentage(f / 100.0)))
             }
             None => Byte::from_str(threshold)
                 // Threshold parameter does not have "%" suffix: Try parsing as Byte
                 .map_err(|_| {
                     io::Error::new(
                         io::ErrorKind::InvalidInput,
-                        format!("Invalid threshold {}.", threshold.code_str()),
+                        format!("Invalid absolute threshold {}.", threshold.code_str()),
                     )
                 })
                 .map(Threshold::Absolute),
