@@ -730,7 +730,7 @@ fn vacuum(
 // Stream Docker events and vacuum when necessary.
 pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::Result<()> {
     // Determine threshold in bytes.
-    let threshold: Byte = match settings.threshold {
+    let threshold = match settings.threshold {
         Threshold::Absolute(b) => b,
         Threshold::Percentage(p) =>
         {
