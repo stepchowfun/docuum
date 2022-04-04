@@ -10,9 +10,10 @@ use {
     scopeguard::guard,
     serde::{Deserialize, Serialize},
     std::{
-        cmp::max,
+        cmp::{max, min},
         collections::{hash_map::Entry, HashMap, HashSet},
         io::{self, BufRead, BufReader},
+        iter::zip,
         mem::drop,
         ops::Deref,
         process::{Command, Stdio},
@@ -320,7 +321,7 @@ fn docker_root_dir() -> io::Result<String> {
         ));
     }
 
-    // Find the relevant line of output.
+    // Trim the output.
     String::from_utf8(output.stdout)
         .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
         .map(|s| s.trim().to_string())
@@ -328,12 +329,9 @@ fn docker_root_dir() -> io::Result<String> {
 
 // Get number of matching characters at the start of two strings.
 fn prefix_match_len(s1: &str, s2: &str) -> usize {
-    let size = std::cmp::min(s1.len(), s2.len());
-    let mut matching_len = 0;
-    while matching_len < size && s1.chars().nth(matching_len) == s2.chars().nth(matching_len) {
-        matching_len += 1;
-    }
-    matching_len
+    zip(s1.chars(), s2.chars())
+        .position(|(c1, c2)| c1 != c2)
+        .unwrap_or(min(s1.len(), s2.len()))
 }
 
 // Find the disk a file is on by longest prefix match of filepath and mountpoint.
@@ -358,7 +356,7 @@ fn docker_root_dir_filesystem_size() -> io::Result<Byte> {
     let sys = System::new_with_specifics(RefreshKind::new().with_disks_list());
     let disks = sys.disks();
     let disk = get_disk_by_file(disks, &root_dir)?;
-    Ok(Byte::from_bytes(u128::from(disk.total_space())))
+    Ok(Byte::from(disk.total_space()))
 }
 
 // Get the total space used by Docker images.
