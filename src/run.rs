@@ -331,7 +331,7 @@ fn docker_root_dir() -> io::Result<String> {
 fn prefix_match_len(s1: &str, s2: &str) -> usize {
     zip(s1.chars(), s2.chars())
         .position(|(c1, c2)| c1 != c2)
-        .unwrap_or(min(s1.len(), s2.len()))
+        .unwrap_or_else(|| min(s1.len(), s2.len()))
 }
 
 // Find the disk a file is on by longest prefix match of filepath and mountpoint.

@@ -44,6 +44,55 @@ enum Threshold {
     Percentage(f64),
 }
 
+impl Threshold {
+    // Parses a Threshold from string. Relative thresholds are only supported on linux.
+    fn from_str(threshold: &str) -> io::Result<Threshold> {
+        match threshold.strip_suffix('%') {
+            Some(threshold_percentage_string) => {
+                if cfg!(target_os = "linux") {
+                    // Threshold parameter has "%" suffix: Try parsing as f64
+                    threshold_percentage_string
+                        .trim()
+                        .parse::<f64>()
+                        // Handle parsing error
+                        .map_err(|_| {
+                            io::Error::new(
+                                io::ErrorKind::InvalidInput,
+                                format!("Invalid relative threshold {}.", threshold.code_str()),
+                            )
+                        })
+                        // Assert range of relative threshold
+                        .and_then(|f| {
+                            if f.is_normal() && 0.0 <= f && f <= 100.0 {
+                                Ok(f)
+                            } else {
+                                Err(io::Error::new(
+                                    io::ErrorKind::InvalidInput,
+                                    format!("Invalid relative threshold {}.", threshold.code_str()),
+                                ))
+                            }
+                        })
+                        .map(|f| Threshold::Percentage(f / 100.0))
+                } else {
+                    Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "Relative thresholds are only supported on linux.",
+                    ))
+                }
+            }
+            None => Byte::from_str(threshold)
+                // Threshold parameter does not have "%" suffix: Try parsing as Byte
+                .map_err(|_| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        format!("Invalid absolute threshold {}.", threshold.code_str()),
+                    )
+                })
+                .map(Threshold::Absolute),
+        }
+    }
+}
+
 // This struct represents the command-line arguments.
 pub struct Settings {
     threshold: Threshold,
@@ -132,45 +181,9 @@ fn settings() -> io::Result<Settings> {
     let default_threshold = Threshold::Absolute(
         Byte::from_str(DEFAULT_THRESHOLD).unwrap(), /*  Manually verified safe */
     );
-    let threshold = matches.value_of(THRESHOLD_OPTION).map_or_else(
-        || Ok(default_threshold),
-        |threshold| match threshold.strip_suffix('%') {
-            Some(threshold_percentage_string) => {
-                // Threshold parameter has "%" suffix: Try parsing as f64
-                threshold_percentage_string
-                .trim()
-                .parse::<f64>()
-                // Handle parsing error
-                .map_err(|_| {
-                    io::Error::new(
-                        io::ErrorKind::InvalidInput,
-                        format!("Invalid relative threshold {}.", threshold.code_str()),
-                    )
-                })
-                // Assert range of relative threshold
-                .and_then(|f| {
-                    if f.is_normal() && 0.0 <= f && f <= 100.0 {
-                        Ok(f)
-                    } else {
-                        Err(io::Error::new(
-                            io::ErrorKind::InvalidInput,
-                            format!("Invalid relative threshold {}.", threshold.code_str()),
-                        ))
-                    }
-                })
-                .and_then(|f| Ok(Threshold::Percentage(f / 100.0)))
-            }
-            None => Byte::from_str(threshold)
-                // Threshold parameter does not have "%" suffix: Try parsing as Byte
-                .map_err(|_| {
-                    io::Error::new(
-                        io::ErrorKind::InvalidInput,
-                        format!("Invalid absolute threshold {}.", threshold.code_str()),
-                    )
-                })
-                .map(Threshold::Absolute),
-        },
-    )?;
+    let threshold = matches
+        .value_of(THRESHOLD_OPTION)
+        .map_or_else(|| Ok(default_threshold), Threshold::from_str)?;
 
     let keep = match matches.values_of(KEEP_OPTION) {
         Some(values) => match RegexSet::new(values) {
