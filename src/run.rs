@@ -220,7 +220,7 @@ fn list_image_records(state: &mut State) -> io::Result<HashMap<String, ImageReco
 
 // Ask Docker for the IDs of the images currently in use by containers.
 fn image_ids_in_use() -> io::Result<HashSet<String>> {
-    // Query Docker for the container IDs.
+    // Query Docker for all the container IDs.
     let container_ids_output = Command::new("docker")
         .args(&[
             "container",
@@ -305,9 +305,9 @@ fn image_ids_in_use() -> io::Result<HashSet<String>> {
     Ok(image_ids)
 }
 
-// Find docker root directory.
+// Determine Docker's root directory.
 fn docker_root_dir() -> io::Result<PathBuf> {
-    // Query Docker for the root directory.
+    // Query Docker for it.
     let output = Command::new("docker")
         .args(&["info", "--format", "{{.DockerRootDir}}"])
         .stderr(Stdio::inherit())
@@ -323,23 +323,23 @@ fn docker_root_dir() -> io::Result<PathBuf> {
 
     // Trim the output.
     String::from_utf8(output.stdout)
+        .map(|s| PathBuf::from(s.trim()))
         .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
-        .map(|s| s.trim().to_string())
-        .map(PathBuf::from)
 }
 
-// Find the disk a file is on by longest prefix match of filepath and mountpoint.
+// Find the disk containing a path.
 fn get_disk_by_file<'a>(disks: &'a [Disk], path: &Path) -> io::Result<&'a Disk> {
     disks
         .iter()
-        // Only consider disks with mountpoint that is prefix of path
         .filter(|d| path.starts_with(d.mount_point()))
-        // Choose disk with longest path-prefix
         .max_by_key(|d| d.mount_point().as_os_str().len())
         .ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::Other,
-                format!("Unable to find disk for path {}.", path.display()),
+                format!(
+                    "Unable to find disk for path {}.",
+                    path.to_string_lossy().code_str(),
+                ),
             )
         })
 }
@@ -347,8 +347,8 @@ fn get_disk_by_file<'a>(disks: &'a [Disk], path: &Path) -> io::Result<&'a Disk> 
 // Find size of filesystem on which docker root directory is stored.
 fn docker_root_dir_filesystem_size() -> io::Result<Byte> {
     let root_dir = docker_root_dir()?;
-    let sys = System::new_with_specifics(RefreshKind::new().with_disks_list());
-    let disks = sys.disks();
+    let system = System::new_with_specifics(RefreshKind::new().with_disks_list());
+    let disks = system.disks();
     let disk = get_disk_by_file(disks, &root_dir)?;
     Ok(Byte::from(disk.total_space()))
 }
@@ -723,7 +723,7 @@ fn vacuum(
 
 // Stream Docker events and vacuum when necessary.
 pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::Result<()> {
-    // Determine threshold in bytes.
+    // Determine the threshold in bytes.
     let threshold = match settings.threshold {
         Threshold::Absolute(b) => b,
         Threshold::Percentage(p) =>

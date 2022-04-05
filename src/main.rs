@@ -45,23 +45,20 @@ enum Threshold {
 }
 
 impl Threshold {
-    // Parses a Threshold from string. Relative thresholds are only supported on linux.
+    // Parse a `Threshold`. Relative thresholds are only supported on Linux.
     fn from_str(threshold: &str) -> io::Result<Threshold> {
         match threshold.strip_suffix('%') {
-            Some(threshold_percentage_string) => {
+            Some(threshold) => {
                 if cfg!(target_os = "linux") {
-                    // Threshold parameter has "%" suffix: Try parsing as f64
-                    threshold_percentage_string
+                    threshold
                         .trim()
                         .parse::<f64>()
-                        // Handle parsing error
                         .map_err(|_| {
                             io::Error::new(
                                 io::ErrorKind::InvalidInput,
                                 format!("Invalid relative threshold {}.", threshold.code_str()),
                             )
                         })
-                        // Assert range of relative threshold
                         .and_then(|f| {
                             if f.is_normal() && 0.0 <= f && f <= 100.0 {
                                 Ok(f)
@@ -76,12 +73,11 @@ impl Threshold {
                 } else {
                     Err(io::Error::new(
                         io::ErrorKind::InvalidInput,
-                        "Relative thresholds are only supported on linux.",
+                        "Relative thresholds are only supported on Linux.",
                     ))
                 }
             }
             None => Byte::from_str(threshold)
-                // Threshold parameter does not have "%" suffix: Try parsing as Byte
                 .map_err(|_| {
                     io::Error::new(
                         io::ErrorKind::InvalidInput,
@@ -145,7 +141,6 @@ fn set_up_logging() {
 }
 
 // Parse the command-line arguments.
-#[allow(clippy::map_err_ignore)]
 fn settings() -> io::Result<Settings> {
     // Set up the command-line interface.
     let matches = App::new("Docuum")
@@ -179,12 +174,13 @@ fn settings() -> io::Result<Settings> {
 
     // Read the threshold.
     let default_threshold = Threshold::Absolute(
-        Byte::from_str(DEFAULT_THRESHOLD).unwrap(), /*  Manually verified safe */
+        Byte::from_str(DEFAULT_THRESHOLD).unwrap(), // Manually verified safe
     );
     let threshold = matches
         .value_of(THRESHOLD_OPTION)
         .map_or_else(|| Ok(default_threshold), Threshold::from_str)?;
 
+    // Determine what images need to be preserved at all costs.
     let keep = match matches.values_of(KEEP_OPTION) {
         Some(values) => match RegexSet::new(values) {
             Ok(set) => Some(set),
