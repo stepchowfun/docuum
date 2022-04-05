@@ -10,12 +10,12 @@ use {
     scopeguard::guard,
     serde::{Deserialize, Serialize},
     std::{
-        cmp::{max, min},
+        cmp::max,
         collections::{hash_map::Entry, HashMap, HashSet},
         io::{self, BufRead, BufReader},
-        iter::zip,
         mem::drop,
         ops::Deref,
+        path::{Path, PathBuf},
         process::{Command, Stdio},
         time::{Duration, SystemTime, UNIX_EPOCH},
     },
@@ -306,7 +306,7 @@ fn image_ids_in_use() -> io::Result<HashSet<String>> {
 }
 
 // Find docker root directory.
-fn docker_root_dir() -> io::Result<String> {
+fn docker_root_dir() -> io::Result<PathBuf> {
     // Query Docker for the root directory.
     let output = Command::new("docker")
         .args(&["info", "--format", "{{.DockerRootDir}}"])
@@ -325,27 +325,21 @@ fn docker_root_dir() -> io::Result<String> {
     String::from_utf8(output.stdout)
         .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
         .map(|s| s.trim().to_string())
-}
-
-// Get number of matching characters at the start of two strings.
-fn prefix_match_len(s1: &str, s2: &str) -> usize {
-    zip(s1.chars(), s2.chars())
-        .position(|(c1, c2)| c1 != c2)
-        .unwrap_or_else(|| min(s1.len(), s2.len()))
+        .map(PathBuf::from)
 }
 
 // Find the disk a file is on by longest prefix match of filepath and mountpoint.
-fn get_disk_by_file<'a>(disks: &'a [Disk], path: &str) -> io::Result<&'a Disk> {
+fn get_disk_by_file<'a>(disks: &'a [Disk], path: &Path) -> io::Result<&'a Disk> {
     disks
         .iter()
         // Only consider disks with mountpoint that is prefix of path
-        .filter(|d| path.starts_with(d.mount_point().to_string_lossy().as_ref()))
+        .filter(|d| path.starts_with(d.mount_point()))
         // Choose disk with longest path-prefix
-        .max_by_key(|d| prefix_match_len(d.mount_point().to_str().unwrap_or(""), path))
+        .max_by_key(|d| d.mount_point().as_os_str().len())
         .ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::Other,
-                format!("Unable to find disk for path {}.", path),
+                format!("Unable to find disk for path {}.", path.display()),
             )
         })
 }
