@@ -2,7 +2,7 @@ use {
     crate::{
         format::CodeStr,
         state::{self, State},
-        Settings,
+        Settings, Threshold,
     },
     byte_unit::Byte,
     chrono::DateTime,
@@ -15,9 +15,11 @@ use {
         io::{self, BufRead, BufReader},
         mem::drop,
         ops::Deref,
+        path::{Path, PathBuf},
         process::{Command, Stdio},
         time::{Duration, SystemTime, UNIX_EPOCH},
     },
+    sysinfo::{Disk, DiskExt, RefreshKind, System, SystemExt},
 };
 
 // When querying Docker for the image IDs corresponding to a list of container IDs, this is the
@@ -301,6 +303,54 @@ fn image_ids_in_use() -> io::Result<HashSet<String>> {
     }
 
     Ok(image_ids)
+}
+
+// Find docker root directory.
+fn docker_root_dir() -> io::Result<PathBuf> {
+    // Query Docker for the root directory.
+    let output = Command::new("docker")
+        .args(&["info", "--format", "{{.DockerRootDir}}"])
+        .stderr(Stdio::inherit())
+        .output()?;
+
+    // Ensure the command succeeded.
+    if !output.status.success() {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "Unable to determine the Docker root directory.",
+        ));
+    }
+
+    // Trim the output.
+    String::from_utf8(output.stdout)
+        .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
+        .map(|s| s.trim().to_string())
+        .map(PathBuf::from)
+}
+
+// Find the disk a file is on by longest prefix match of filepath and mountpoint.
+fn get_disk_by_file<'a>(disks: &'a [Disk], path: &Path) -> io::Result<&'a Disk> {
+    disks
+        .iter()
+        // Only consider disks with mountpoint that is prefix of path
+        .filter(|d| path.starts_with(d.mount_point()))
+        // Choose disk with longest path-prefix
+        .max_by_key(|d| d.mount_point().as_os_str().len())
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("Unable to find disk for path {}.", path.display()),
+            )
+        })
+}
+
+// Find size of filesystem on which docker root directory is stored.
+fn docker_root_dir_filesystem_size() -> io::Result<Byte> {
+    let root_dir = docker_root_dir()?;
+    let sys = System::new_with_specifics(RefreshKind::new().with_disks_list());
+    let disks = sys.disks();
+    let disk = get_disk_by_file(disks, &root_dir)?;
+    Ok(Byte::from(disk.total_space()))
 }
 
 // Get the total space used by Docker images.
@@ -673,12 +723,26 @@ fn vacuum(
 
 // Stream Docker events and vacuum when necessary.
 pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::Result<()> {
+    // Determine threshold in bytes.
+    let threshold = match settings.threshold {
+        Threshold::Absolute(b) => b,
+        Threshold::Percentage(p) =>
+        {
+            #[allow(
+                clippy::cast_precision_loss,
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss
+            )]
+            Byte::from_bytes((p * docker_root_dir_filesystem_size()?.get_bytes() as f64) as u128)
+        }
+    };
+
     // NOTE: Don't change this log line, since the test in the Homebrew formula
     // (https://github.com/Homebrew/homebrew-core/blob/HEAD/Formula/docuum.rb) relies on it.
     info!("Performing an initial vacuum on startup\u{2026}");
 
     // Run the main vacuum logic.
-    vacuum(state, *first_run, settings.threshold, &settings.keep)?;
+    vacuum(state, *first_run, threshold, &settings.keep)?;
     state::save(state)?;
     *first_run = false;
 
@@ -755,7 +819,7 @@ pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::
         touch_image(state, &image_id, true)?;
 
         // Run the main vacuum logic.
-        vacuum(state, *first_run, settings.threshold, &settings.keep)?;
+        vacuum(state, *first_run, threshold, &settings.keep)?;
 
         // Persist the state.
         state::save(state)?;
