@@ -54,7 +54,7 @@ OPTIONS:
             Prints version information
 ```
 
-The `--threshold` flag accepts [multiple representations](https://docs.rs/byte-unit/4.0.12/byte_unit/struct.Byte.html#examples-2), like `10 GB`, `10 GiB`, or `10GB`.
+The `--threshold` flag accepts [multiple representations](https://docs.rs/byte-unit/4.0.12/byte_unit/struct.Byte.html#examples-2), like `10 GB`, `10 GiB`, or `10GB`. On Linux, percentage-based thresholds like `50%` are also supported.
 
 You can change the log verbosity by setting an environment variable named `LOG_LEVEL` to one of `trace`, `debug`, `info`, `warning`, or `error`. The default is `debug`.
 
