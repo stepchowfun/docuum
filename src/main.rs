@@ -41,11 +41,14 @@ const KEEP_OPTION: &str = "keep";
 #[derive(Copy, Clone)]
 enum Threshold {
     Absolute(Byte),
+
+    #[cfg(target_os = "linux")]
     Percentage(f64),
 }
 
 impl Threshold {
     // Parse a `Threshold`. Relative thresholds are only supported on Linux.
+    #[cfg(target_os = "linux")]
     fn from_str(threshold: &str) -> io::Result<Threshold> {
         match threshold.strip_suffix('%') {
             Some(threshold) => {
@@ -86,6 +89,18 @@ impl Threshold {
                 })
                 .map(Threshold::Absolute),
         }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn from_str(threshold: &str) -> io::Result<Threshold> {
+        Byte::from_str(threshold)
+            .map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("Invalid absolute threshold {}.", threshold.code_str()),
+                )
+            })
+            .map(Threshold::Absolute)
     }
 }
 

@@ -15,10 +15,14 @@ use {
         io::{self, BufRead, BufReader},
         mem::drop,
         ops::Deref,
-        path::{Path, PathBuf},
         process::{Command, Stdio},
         time::{Duration, SystemTime, UNIX_EPOCH},
     },
+};
+
+#[cfg(target_os = "linux")]
+use {
+    std::path::{Path, PathBuf},
     sysinfo::{Disk, DiskExt, RefreshKind, System, SystemExt},
 };
 
@@ -306,6 +310,7 @@ fn image_ids_in_use() -> io::Result<HashSet<String>> {
 }
 
 // Determine Docker's root directory.
+#[cfg(target_os = "linux")]
 fn docker_root_dir() -> io::Result<PathBuf> {
     // Query Docker for it.
     let output = Command::new("docker")
@@ -328,6 +333,7 @@ fn docker_root_dir() -> io::Result<PathBuf> {
 }
 
 // Find the disk containing a path.
+#[cfg(target_os = "linux")]
 fn get_disk_by_file<'a>(disks: &'a [Disk], path: &Path) -> io::Result<&'a Disk> {
     disks
         .iter()
@@ -345,6 +351,7 @@ fn get_disk_by_file<'a>(disks: &'a [Disk], path: &Path) -> io::Result<&'a Disk> 
 }
 
 // Find size of filesystem on which docker root directory is stored.
+#[cfg(target_os = "linux")]
 fn docker_root_dir_filesystem_size() -> io::Result<Byte> {
     let root_dir = docker_root_dir()?;
     let system = System::new_with_specifics(RefreshKind::new().with_disks_list());
@@ -726,6 +733,8 @@ pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::
     // Determine the threshold in bytes.
     let threshold = match settings.threshold {
         Threshold::Absolute(b) => b,
+
+        #[cfg(target_os = "linux")]
         Threshold::Percentage(p) =>
         {
             #[allow(
