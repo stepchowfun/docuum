@@ -1,5 +1,5 @@
 # A minimal base image
-FROM alpine:3.15.0
+FROM alpine:3.15
 
 # Install the Docker CLI.
 RUN apk add --no-cache docker-cli
