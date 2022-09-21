@@ -16,7 +16,7 @@ byte-unit = "4"
 chrono = "0.4"
 colored = "2"
 dirs = "3"
-env_logger = "0.8"
+env_logger = { version = "0.8", default-features = false, features = ["termcolor", "atty"] }
 log = "0.4"
 scopeguard = "1"
 serde_json = "1.0"
