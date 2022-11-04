@@ -100,7 +100,7 @@ struct ImageNode {
 fn image_id(image: &str) -> io::Result<String> {
     // Query Docker for the image ID.
     let output = Command::new("docker")
-        .args(&["image", "inspect", "--format", "{{.ID}}", image])
+        .args(["image", "inspect", "--format", "{{.ID}}", image])
         .stderr(Stdio::inherit())
         .output()?;
 
@@ -127,7 +127,7 @@ fn parent_id(state: &State, image_id: &str) -> io::Result<Option<String>> {
 
     // Query Docker for the parent image ID.
     let output = Command::new("docker")
-        .args(&["image", "inspect", "--format", "{{.Parent}}", image_id])
+        .args(["image", "inspect", "--format", "{{.Parent}}", image_id])
         .stderr(Stdio::inherit())
         .output()?;
 
@@ -161,7 +161,7 @@ fn parent_id(state: &State, image_id: &str) -> io::Result<Option<String>> {
 fn list_image_records(state: &mut State) -> io::Result<HashMap<String, ImageRecord>> {
     // Get the IDs and creation timestamps of all the images.
     let output = Command::new("docker")
-        .args(&[
+        .args([
             "image",
             "ls",
             "--all",
@@ -201,7 +201,7 @@ fn list_image_records(state: &mut State) -> io::Result<HashMap<String, ImageReco
 
             match image_records.entry(id.to_owned()) {
                 Entry::Occupied(mut entry) => {
-                    (*entry.get_mut()).repository_tags.push(repository_tag);
+                    (entry.get_mut()).repository_tags.push(repository_tag);
                 }
                 Entry::Vacant(entry) => {
                     entry.insert(ImageRecord {
@@ -226,7 +226,7 @@ fn list_image_records(state: &mut State) -> io::Result<HashMap<String, ImageReco
 fn image_ids_in_use() -> io::Result<HashSet<String>> {
     // Query Docker for all the container IDs.
     let container_ids_output = Command::new("docker")
-        .args(&[
+        .args([
             "container",
             "ls",
             "--all",
@@ -314,7 +314,7 @@ fn image_ids_in_use() -> io::Result<HashSet<String>> {
 fn docker_root_dir() -> io::Result<PathBuf> {
     // Query Docker for it.
     let output = Command::new("docker")
-        .args(&["info", "--format", "{{.DockerRootDir}}"])
+        .args(["info", "--format", "{{.DockerRootDir}}"])
         .stderr(Stdio::inherit())
         .output()?;
 
@@ -365,7 +365,7 @@ fn docker_root_dir_filesystem_size() -> io::Result<Byte> {
 fn space_usage() -> io::Result<Byte> {
     // Query Docker for the space usage.
     let output = Command::new("docker")
-        .args(&["system", "df", "--format", "{{json .}}"])
+        .args(["system", "df", "--format", "{{json .}}"])
         .stderr(Stdio::inherit())
         .output()?;
 
@@ -417,7 +417,7 @@ fn delete_image(image: &str) -> io::Result<()> {
 
     // Tell Docker to delete the image.
     let mut child = Command::new("docker")
-        .args(&["image", "rm", "--force", "--no-prune", image])
+        .args(["image", "rm", "--force", "--no-prune", image])
         .spawn()?;
 
     // Ensure the command succeeded.
@@ -647,28 +647,24 @@ fn vacuum(
     // If the user provided the `--keep` argument, we need to filter out images which match the
     // provided regexes.
     if let Some(regex_set) = keep {
-        sorted_image_nodes = sorted_image_nodes
-            .into_iter()
-            .filter(|(_, image_node)| {
-                for repository_tag in &image_node.image_record.repository_tags {
-                    if regex_set.is_match(&format!(
-                        "{}:{}",
-                        repository_tag.repository,
-                        repository_tag.tag,
-                    )) {
-                        debug!(
-                            "Ignored image {} due to the {} flag.",
-                            format!("{}:{}", repository_tag.repository, repository_tag.tag)
-                                .code_str(),
-                            "--keep".code_str(),
-                        );
-                        return false;
-                    }
+        sorted_image_nodes.retain(|(_, image_node)| {
+            for repository_tag in &image_node.image_record.repository_tags {
+                if regex_set.is_match(&format!(
+                    "{}:{}",
+                    repository_tag.repository,
+                    repository_tag.tag,
+                )) {
+                    debug!(
+                        "Ignored image {} due to the {} flag.",
+                        format!("{}:{}", repository_tag.repository, repository_tag.tag).code_str(),
+                        "--keep".code_str(),
+                    );
+                    return false;
                 }
+            }
 
-                true
-            })
-            .collect();
+            true
+        });
     }
 
     // Check if we're over the threshold.
@@ -758,7 +754,7 @@ pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::
     // Spawn `docker events --format '{{json .}}'`.
     let mut child = guard(
         Command::new("docker")
-            .args(&["events", "--format", "{{json .}}"])
+            .args(["events", "--format", "{{json .}}"])
             .stdout(Stdio::piped())
             .spawn()?,
         |mut child| {
