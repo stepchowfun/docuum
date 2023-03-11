@@ -32,10 +32,12 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 // Defaults
 const DEFAULT_LOG_LEVEL: LevelFilter = LevelFilter::Debug;
 const DEFAULT_THRESHOLD: &str = "10 GB";
+const DEFAULT_DELETION_CHUNK_SIZE: i32 = 1;
 
 // Command-line argument and option names
 const THRESHOLD_OPTION: &str = "threshold";
 const KEEP_OPTION: &str = "keep";
+const DELETION_CHUNK_SIZE_OPTION: &str = "deletion-chunk-size";
 
 // Size threshold argument, absolute or relative to filesystem size
 #[derive(Copy, Clone)]
@@ -108,6 +110,7 @@ impl Threshold {
 pub struct Settings {
     threshold: Threshold,
     keep: Option<RegexSet>,
+    del_chunk_size: i32,
 }
 
 // Set up the logger.
@@ -185,6 +188,16 @@ fn settings() -> io::Result<Settings> {
                 .number_of_values(1)
                 .help("Prevents deletion of images for which repository:tag matches <REGEX>"),
         )
+        .arg(
+            Arg::with_name(DELETION_CHUNK_SIZE_OPTION)
+                .value_name("DELETION CHUNK SIZE")
+                .short("d")
+                .long(DELETION_CHUNK_SIZE_OPTION)
+                .help(&format!(
+                    "Removes specified quantity of images before checking disk usage (default: {})",
+                    DEFAULT_DELETION_CHUNK_SIZE
+                )),
+        )
         .get_matches();
 
     // Read the threshold.
@@ -204,7 +217,12 @@ fn settings() -> io::Result<Settings> {
         None => None,
     };
 
-    Ok(Settings { threshold, keep })
+    let del_chunk_size = match matches.value_of(DELETION_CHUNK_SIZE_OPTION) {
+        Some(v) => v.parse::<i32>().unwrap(),
+        None => DEFAULT_DELETION_CHUNK_SIZE,
+    };
+
+    Ok(Settings { threshold, keep, del_chunk_size })
 }
 
 // Let the fun begin!
