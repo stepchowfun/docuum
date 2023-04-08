@@ -2,4 +2,3 @@
 # don't ignore /.git/ since Git already ignores it.
 /artifacts/
 /target/
-.idea
