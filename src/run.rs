@@ -652,7 +652,8 @@ fn vacuum(
             for repository_tag in &image_node.image_record.repository_tags {
                 if regex_set.is_match(&format!(
                     "{}:{}",
-                    repository_tag.repository, repository_tag.tag,
+                    repository_tag.repository,
+                    repository_tag.tag,
                 )) {
                     debug!(
                         "Ignored image {} due to the {} flag.",

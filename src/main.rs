@@ -196,7 +196,7 @@ fn settings() -> io::Result<Settings> {
                 .number_of_values(1)
                 .help(&format!(
                     "Removes specified quantity of images at a time (default: {})",
-                    DEFAULT_DELETION_CHUNK_SIZE
+                    DEFAULT_DELETION_CHUNK_SIZE,
                 )),
         )
         .get_matches();
