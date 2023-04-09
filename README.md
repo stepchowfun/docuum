@@ -41,6 +41,9 @@ USAGE:
     docuum
 
 OPTIONS:
+    -d, --deletion-chunk-size <DELETION CHUNK SIZE>
+            Removes specified quantity of images at a time (default: 1)
+
     -h, --help
             Prints help information
 

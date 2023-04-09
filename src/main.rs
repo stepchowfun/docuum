@@ -30,12 +30,14 @@ extern crate log;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 // Defaults
+const DEFAULT_DELETION_CHUNK_SIZE: usize = 1;
 const DEFAULT_LOG_LEVEL: LevelFilter = LevelFilter::Debug;
 const DEFAULT_THRESHOLD: &str = "10 GB";
 
 // Command-line argument and option names
-const THRESHOLD_OPTION: &str = "threshold";
+const DELETION_CHUNK_SIZE_OPTION: &str = "deletion-chunk-size";
 const KEEP_OPTION: &str = "keep";
+const THRESHOLD_OPTION: &str = "threshold";
 
 // Size threshold argument, absolute or relative to filesystem size
 #[derive(Copy, Clone)]
@@ -108,6 +110,7 @@ impl Threshold {
 pub struct Settings {
     threshold: Threshold,
     keep: Option<RegexSet>,
+    deletion_chunk_size: usize,
 }
 
 // Set up the logger.
@@ -185,6 +188,17 @@ fn settings() -> io::Result<Settings> {
                 .number_of_values(1)
                 .help("Prevents deletion of images for which repository:tag matches <REGEX>"),
         )
+        .arg(
+            Arg::with_name(DELETION_CHUNK_SIZE_OPTION)
+                .value_name("DELETION CHUNK SIZE")
+                .short("d")
+                .long(DELETION_CHUNK_SIZE_OPTION)
+                .number_of_values(1)
+                .help(&format!(
+                    "Removes specified quantity of images at a time (default: {})",
+                    DEFAULT_DELETION_CHUNK_SIZE,
+                )),
+        )
         .get_matches();
 
     // Read the threshold.
@@ -204,7 +218,20 @@ fn settings() -> io::Result<Settings> {
         None => None,
     };
 
-    Ok(Settings { threshold, keep })
+    // Determine how many images to delete at once.
+    let deletion_chunk_size = match matches.value_of(DELETION_CHUNK_SIZE_OPTION) {
+        Some(v) => match v.parse::<usize>() {
+            Ok(chunk_size) => chunk_size,
+            Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidInput, e)),
+        },
+        None => DEFAULT_DELETION_CHUNK_SIZE,
+    };
+
+    Ok(Settings {
+        threshold,
+        keep,
+        deletion_chunk_size,
+    })
 }
 
 // Let the fun begin!

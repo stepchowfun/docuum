@@ -625,6 +625,7 @@ fn vacuum(
     first_run: bool,
     threshold: Byte,
     keep: &Option<RegexSet>,
+    deletion_chunk_size: usize,
 ) -> io::Result<()> {
     // Find all images.
     let image_records = list_image_records(state)?;
@@ -678,14 +679,16 @@ fn vacuum(
         );
 
         // Start deleting images, beginning with the least recently used.
-        for (image_id, _) in sorted_image_nodes {
-            // Delete the image.
-            if let Err(error) = delete_image(image_id) {
-                // The deletion failed. Just log the error and proceed.
-                error!("{}", error);
-            } else {
-                // Forget about the deleted image.
-                deleted_image_ids.insert(image_id.clone());
+        for image_ids in sorted_image_nodes.chunks_mut(deletion_chunk_size) {
+            for (image_id, _) in image_ids {
+                // Delete the image.
+                if let Err(error) = delete_image(image_id) {
+                    // The deletion failed. Just log the error and proceed.
+                    error!("{}", error);
+                } else {
+                    // Forget about the deleted image.
+                    deleted_image_ids.insert(image_id.clone());
+                }
             }
 
             // Break if we're within the threshold.
@@ -747,7 +750,13 @@ pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::
     info!("Performing an initial vacuum on startup\u{2026}");
 
     // Run the main vacuum logic.
-    vacuum(state, *first_run, threshold, &settings.keep)?;
+    vacuum(
+        state,
+        *first_run,
+        threshold,
+        &settings.keep,
+        settings.deletion_chunk_size,
+    )?;
     state::save(state)?;
     *first_run = false;
 
@@ -824,7 +833,13 @@ pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::
         touch_image(state, &image_id, true)?;
 
         // Run the main vacuum logic.
-        vacuum(state, *first_run, threshold, &settings.keep)?;
+        vacuum(
+            state,
+            *first_run,
+            threshold,
+            &settings.keep,
+            settings.deletion_chunk_size,
+        )?;
 
         // Persist the state.
         state::save(state)?;
