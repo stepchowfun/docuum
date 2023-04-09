@@ -652,8 +652,7 @@ fn vacuum(
             for repository_tag in &image_node.image_record.repository_tags {
                 if regex_set.is_match(&format!(
                     "{}:{}",
-                    repository_tag.repository,
-                    repository_tag.tag,
+                    repository_tag.repository, repository_tag.tag,
                 )) {
                     debug!(
                         "Ignored image {} due to the {} flag.",
@@ -750,7 +749,13 @@ pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::
     info!("Performing an initial vacuum on startup\u{2026}");
 
     // Run the main vacuum logic.
-    vacuum(state, *first_run, threshold, &settings.keep, settings.deletion_chunk_size)?;
+    vacuum(
+        state,
+        *first_run,
+        threshold,
+        &settings.keep,
+        settings.deletion_chunk_size,
+    )?;
     state::save(state)?;
     *first_run = false;
 
@@ -827,7 +832,13 @@ pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::
         touch_image(state, &image_id, true)?;
 
         // Run the main vacuum logic.
-        vacuum(state, *first_run, threshold, &settings.keep, settings.deletion_chunk_size)?;
+        vacuum(
+            state,
+            *first_run,
+            threshold,
+            &settings.keep,
+            settings.deletion_chunk_size,
+        )?;
 
         // Persist the state.
         state::save(state)?;

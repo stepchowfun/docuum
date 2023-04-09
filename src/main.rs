@@ -222,12 +222,16 @@ fn settings() -> io::Result<Settings> {
     let deletion_chunk_size = match matches.value_of(DELETION_CHUNK_SIZE_OPTION) {
         Some(v) => match v.parse::<usize>() {
             Ok(chunk_size) => chunk_size,
-            Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidInput, e))
+            Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidInput, e)),
         },
         None => DEFAULT_DELETION_CHUNK_SIZE,
     };
 
-    Ok(Settings { threshold, keep, deletion_chunk_size })
+    Ok(Settings {
+        threshold,
+        keep,
+        deletion_chunk_size,
+    })
 }
 
 // Let the fun begin!
