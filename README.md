@@ -70,7 +70,7 @@ Installation consists of two steps:
 
 ### Installing the binary
 
-### Installation on macOS (AArch64 or x86-64) or Linux (x86-64)
+#### Installation on macOS (AArch64 or x86-64) or Linux (x86-64)
 
 If you're running macOS (AArch64 or x86-64) or Linux (x86-64), you can install Docuum with this command:
 
