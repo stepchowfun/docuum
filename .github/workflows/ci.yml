@@ -41,6 +41,16 @@ jobs:
         name: x86_64-unknown-linux-musl
         path: artifacts/docuum
         if-no-files-found: error
+    - run: |
+        # Make Bash not silently ignore errors.
+        set -euo pipefail
+        # The artifact name will contain the target triple, so the file name doesn't need to.
+        mv artifacts/docuum-aarch64-unknown-linux-gnu artifacts/docuum
+    - uses: actions/upload-artifact@v2
+      with:
+        name: aarch64-unknown-linux-gnu
+        path: artifacts/docuum
+        if-no-files-found: error
   ci-windows:
     name: Build for Windows
     runs-on: windows-latest
@@ -167,6 +177,9 @@ jobs:
           artifacts/x86_64-unknown-linux-musl/docuum \
           artifacts/docuum-x86_64-unknown-linux-musl
         mv \
+          artifacts/aarch64-unknown-linux-gnu/docuum \
+          artifacts/docuum-aarch64-unknown-linux-gnu
+        mv \
           artifacts/x86_64-apple-darwin/docuum \
           artifacts/docuum-x86_64-apple-darwin
         mv \
@@ -203,6 +216,7 @@ jobs:
           --message "v$VERSION" \
           --attach 'artifacts/docuum-x86_64-unknown-linux-gnu' \
           --attach 'artifacts/docuum-x86_64-unknown-linux-musl' \
+          --attach 'artifacts/docuum-aarch64-unknown-linux-gnu' \
           --attach 'artifacts/docuum-x86_64-apple-darwin' \
           --attach 'artifacts/docuum-aarch64-apple-darwin' \
           --attach 'artifacts/docuum-x86_64-pc-windows-msvc.exe' \
