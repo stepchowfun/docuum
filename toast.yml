@@ -260,7 +260,7 @@ tasks:
     dependencies:
       - release
     input_paths:
-      - integration_test.sh
+      - integration-test.sh
     cache: false
     mount_paths:
       - /var/run/docker.sock
@@ -283,8 +283,8 @@ tasks:
         docker:dind
       docker exec dind apk add bash
       docker cp "artifacts/docuum-x86_64-unknown-linux-musl" dind:/
-      docker cp integration_test.sh dind:/
-      docker exec dind ./integration_test.sh
+      docker cp integration-test.sh dind:/
+      docker exec dind ./integration-test.sh
 
   publish:
     description: Publish the crate to crates.io.
