@@ -158,7 +158,7 @@ fn parent_id(state: &State, image_id: &str) -> io::Result<Option<String>> {
 }
 
 // Query Docker for all the images.
-fn list_image_records(state: &mut State) -> io::Result<HashMap<String, ImageRecord>> {
+fn list_image_records(state: &State) -> io::Result<HashMap<String, ImageRecord>> {
     // Get the IDs and creation timestamps of all the images.
     let output = Command::new("docker")
         .args([
