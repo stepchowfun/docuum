@@ -449,17 +449,17 @@ fn touch_image(state: &mut State, image_id: &str, verbose: bool) -> io::Result<b
     // Get the current timestamp.
     match SystemTime::now().duration_since(UNIX_EPOCH) {
         Ok(duration) => {
-            let is_new_image = !state.images.contains_key(image_id);
-
             // Store the image metadata in the state.
-            state.images.insert(
-                image_id.to_owned(),
-                state::Image {
-                    parent_id: parent_id(state, image_id)?,
-                    last_used_since_epoch: duration,
-                },
-            );
-            Ok(is_new_image)
+            Ok(state
+                .images
+                .insert(
+                    image_id.to_owned(),
+                    state::Image {
+                        parent_id: parent_id(state, image_id)?,
+                        last_used_since_epoch: duration,
+                    },
+                )
+                .is_none())
         }
         Err(error) => Err(io::Error::new(
             io::ErrorKind::Other,
@@ -655,7 +655,8 @@ fn vacuum(
             for repository_tag in &image_node.image_record.repository_tags {
                 if regex_set.is_match(&format!(
                     "{}:{}",
-                    repository_tag.repository, repository_tag.tag,
+                    repository_tag.repository,
+                    repository_tag.tag,
                 )) {
                     debug!(
                         "Ignored image {} due to the {} flag.",
