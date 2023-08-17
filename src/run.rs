@@ -432,7 +432,8 @@ fn delete_image(image: &str) -> io::Result<()> {
 }
 
 // Update the timestamp for an image.
-fn touch_image(state: &mut State, image_id: &str, verbose: bool) -> io::Result<()> {
+// Returns a boolean indicating if a new entry was created for the image.
+fn touch_image(state: &mut State, image_id: &str, verbose: bool) -> io::Result<bool> {
     if verbose {
         debug!(
             "Updating last-used timestamp for image {}\u{2026}",
@@ -448,6 +449,8 @@ fn touch_image(state: &mut State, image_id: &str, verbose: bool) -> io::Result<(
     // Get the current timestamp.
     match SystemTime::now().duration_since(UNIX_EPOCH) {
         Ok(duration) => {
+            let is_new_image = !state.images.contains_key(image_id);
+
             // Store the image metadata in the state.
             state.images.insert(
                 image_id.to_owned(),
@@ -456,7 +459,7 @@ fn touch_image(state: &mut State, image_id: &str, verbose: bool) -> io::Result<(
                     last_used_since_epoch: duration,
                 },
             );
-            Ok(())
+            Ok(is_new_image)
         }
         Err(error) => Err(io::Error::new(
             io::ErrorKind::Other,
@@ -652,8 +655,7 @@ fn vacuum(
             for repository_tag in &image_node.image_record.repository_tags {
                 if regex_set.is_match(&format!(
                     "{}:{}",
-                    repository_tag.repository,
-                    repository_tag.tag,
+                    repository_tag.repository, repository_tag.tag,
                 )) {
                     debug!(
                         "Ignored image {} due to the {} flag.",
@@ -830,16 +832,16 @@ pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::
         debug!("Waking up\u{2026}");
 
         // Update the timestamp for this image.
-        touch_image(state, &image_id, true)?;
-
-        // Run the main vacuum logic.
-        vacuum(
-            state,
-            *first_run,
-            threshold,
-            &settings.keep,
-            settings.deletion_chunk_size,
-        )?;
+        if touch_image(state, &image_id, true)? {
+            // Run the main vacuum logic only if a new image came in.
+            vacuum(
+                state,
+                *first_run,
+                threshold,
+                &settings.keep,
+                settings.deletion_chunk_size,
+            )?;
+        }
 
         // Persist the state.
         state::save(state)?;
