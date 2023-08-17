@@ -432,7 +432,8 @@ fn delete_image(image: &str) -> io::Result<()> {
 }
 
 // Update the timestamp for an image.
-fn touch_image(state: &mut State, image_id: &str, verbose: bool) -> io::Result<()> {
+// Returns a boolean indicating if a new entry was created for the image.
+fn touch_image(state: &mut State, image_id: &str, verbose: bool) -> io::Result<bool> {
     if verbose {
         debug!(
             "Updating last-used timestamp for image {}\u{2026}",
@@ -449,14 +450,16 @@ fn touch_image(state: &mut State, image_id: &str, verbose: bool) -> io::Result<(
     match SystemTime::now().duration_since(UNIX_EPOCH) {
         Ok(duration) => {
             // Store the image metadata in the state.
-            state.images.insert(
-                image_id.to_owned(),
-                state::Image {
-                    parent_id: parent_id(state, image_id)?,
-                    last_used_since_epoch: duration,
-                },
-            );
-            Ok(())
+            Ok(state
+                .images
+                .insert(
+                    image_id.to_owned(),
+                    state::Image {
+                        parent_id: parent_id(state, image_id)?,
+                        last_used_since_epoch: duration,
+                    },
+                )
+                .is_none())
         }
         Err(error) => Err(io::Error::new(
             io::ErrorKind::Other,
@@ -830,16 +833,16 @@ pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::
         debug!("Waking up\u{2026}");
 
         // Update the timestamp for this image.
-        touch_image(state, &image_id, true)?;
-
-        // Run the main vacuum logic.
-        vacuum(
-            state,
-            *first_run,
-            threshold,
-            &settings.keep,
-            settings.deletion_chunk_size,
-        )?;
+        if touch_image(state, &image_id, true)? {
+            // Run the main vacuum logic only if a new image came in.
+            vacuum(
+                state,
+                *first_run,
+                threshold,
+                &settings.keep,
+                settings.deletion_chunk_size,
+            )?;
+        }
 
         // Persist the state.
         state::save(state)?;
