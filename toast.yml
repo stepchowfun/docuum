@@ -306,4 +306,4 @@ tasks:
       fi
 
       # Publish to crates.io.
-      # cargo-online publish --token "$CRATES_IO_TOKEN"
+      cargo-online publish --token "$CRATES_IO_TOKEN"
