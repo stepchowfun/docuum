@@ -463,7 +463,7 @@ fn touch_image(state: &mut State, image_id: &str, verbose: bool) -> io::Result<b
         }
         Err(error) => Err(io::Error::new(
             io::ErrorKind::Other,
-            format!("Unable to compute the current timestamp: {:?}.", error),
+            format!("Unable to compute the current timestamp: {error:?}."),
         )),
     }
 }
@@ -504,7 +504,7 @@ fn construct_polyforest(
         Ok(duration) => Ok(duration),
         Err(error) => Err(io::Error::new(
             io::ErrorKind::Other,
-            format!("Unable to compute the current timestamp: {:?}.", error),
+            format!("Unable to compute the current timestamp: {error:?}."),
         )),
     }?;
 
@@ -796,7 +796,7 @@ pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::
         // Parse the line as an event.
         let event = match serde_json::from_str::<Event>(&line) {
             Ok(event) => {
-                trace!("Parsed as: {}", format!("{:?}", event).code_str());
+                trace!("Parsed as: {}", format!("{event:?}").code_str());
                 event
             }
             Err(error) => {
