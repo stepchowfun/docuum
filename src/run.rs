@@ -749,7 +749,7 @@ pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::
     };
 
     // NOTE: Don't change this log line, since the test in the Homebrew formula
-    // (https://github.com/Homebrew/homebrew-core/blob/HEAD/Formula/docuum.rb) relies on it.
+    // (https://github.com/Homebrew/homebrew-core/blob/HEAD/Formula/d/docuum.rb) relies on it.
     info!("Performing an initial vacuum on startup\u{2026}");
 
     // Run the main vacuum logic.
