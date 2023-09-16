@@ -8,7 +8,7 @@ Docker's built-in `docker image prune --all --filter until=…` command serves a
 
 Docuum is ideal for use cases such as continuous integration (CI) workers, developer workstations, or any other environment in which Docker images accumulate on disk over time. Docuum works well with tools like [Toast](https://github.com/stepchowfun/toast) and [Docker Compose](https://docs.docker.com/compose/).
 
-Docuum is used by Airbnb on its fleet of 1.5k+ CI workers.
+Docuum is used by Netflix (on its production Kubernetes nodes) and Airbnb (on its CI fleet of 1.5k+ CI workers).
 
 ## How it works
 
