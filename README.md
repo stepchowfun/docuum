@@ -121,7 +121,7 @@ You can run that command with `--force` to update an existing installation.
 
 #### Running Docuum in a Docker container on a host capable of running Linux containers
 
-If you prefer not to install Docuum on your system and you're running macOS or Linux on an x86-64 CPU, you can run it in a container:
+If you prefer not to install Docuum on your system and you're running macOS or Linux (AArch64 or x86-64), you can run it in a container:
 
 ```sh
 docker run \
