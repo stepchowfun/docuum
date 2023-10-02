@@ -282,8 +282,7 @@ jobs:
           --attach 'artifacts/docuum-aarch64-pc-windows-msvc.exe' \
           "v$VERSION_TO_PUBLISH"
         echo "Created release v$VERSION_TO_PUBLISH."
-    - if: ${{ env.VERSION_TO_PUBLISH != null }}
-      uses: stepchowfun/toast/.github/actions/toast@main
+    - uses: stepchowfun/toast/.github/actions/toast@main
       with:
         tasks: publish
         docker_repo: stephanmisc/toast
