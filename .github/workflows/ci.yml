@@ -250,6 +250,8 @@ jobs:
         platforms: linux/amd64,linux/arm64
         tags: stephanmisc/docuum,stephanmisc/docuum:${{ env.VERSION_TO_PUBLISH }}
     - if: ${{ env.VERSION_TO_PUBLISH != null }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         # Make Bash not silently ignore errors.
         set -euo pipefail
