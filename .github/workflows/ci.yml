@@ -10,7 +10,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - if: ${{ github.event_name == 'push' }}
-      uses: azure/docker-login@v1
+      uses: docker/login-action@v3
       with:
         username: stephanmisc
         password: ${{ secrets.DOCKER_PASSWORD }}
@@ -183,7 +183,9 @@ jobs:
     needs: [ci-linux, ci-macos, ci-windows, install-macos, install-ubuntu]
     steps:
     - uses: actions/checkout@v3
-    - uses: azure/docker-login@v1
+    - uses: docker/setup-qemu-action@v3 # For building multi-platform images
+    - uses: docker/setup-buildx-action@v3 # For building multi-platform images
+    - uses: docker/login-action@v3
       with:
         username: stephanmisc
         password: ${{ secrets.DOCKER_PASSWORD }}
@@ -203,10 +205,11 @@ jobs:
         # Fetch the program version.
         VERSION="$(cargo pkgid | cut -d# -f2 | cut -d: -f2)"
 
-        # If the release already exists, exit early.
+        # Determine if the release already exists.
         if hub release show "v$VERSION" &> /dev/null; then
           echo "Release v$VERSION already exists."
-          exit
+        else
+          echo "VERSION_TO_PUBLISH=$VERSION" >> "$GITHUB_ENV"
         fi
 
         # Give the artifacts unique names.
@@ -235,31 +238,38 @@ jobs:
           artifacts/aarch64-pc-windows-msvc/docuum.exe \
           artifacts/docuum-aarch64-pc-windows-msvc.exe
 
-        # Make the x86_64-unknown-linux-musl artifact executable again before building the Docker
-        # image with it below. See https://github.com/actions/upload-artifact/issues/38.
+        # For the Docker image, make the relevant artifacts executable again. See
+        # https://github.com/actions/upload-artifact/issues/38.
         chmod a+x artifacts/docuum-x86_64-unknown-linux-musl
+        chmod a+x artifacts/docuum-aarch64-unknown-linux-musl
+    - if: ${{ env.VERSION_TO_PUBLISH != null }}
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        platforms: linux/amd64,linux/arm64
+        tags: stephanmisc/docuum,stephanmisc/docuum:${{ env.VERSION_TO_PUBLISH }}
+    - if: ${{ env.VERSION_TO_PUBLISH != null }}
+      run: |
+        # Make Bash not silently ignore errors.
+        set -euo pipefail
 
-        # Build the Docker image.
-        docker build --tag stephanmisc/docuum --tag "stephanmisc/docuum:$VERSION" .
-
-        # Run the Docker image to validate it.
+        # Run the Docker image to validate it. The image has already been published (since the
+        # `docker/build-push-action@v5` action unfortunately doesn't support importing multi-
+        # platform images into a local Docker installation), but we still validate it now anyway.
         docker run \
           --init \
           --rm \
           --tty \
           --name docuum \
-          --volume /var/run/docker.sock:/var/run/docker.sock \
-          --volume docuum:/root \
-          stephanmisc/docuum --help
-
-        # Push the Docker image.
-        docker push stephanmisc/docuum
-        docker push "stephanmisc/docuum:$VERSION"
+          --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
+          --mount type=volume,source=docuum,target=/root \
+          "stephanmisc/docuum:$VERSION_TO_PUBLISH" --help
 
         # Create the release.
         hub release create \
           --commitish '${{ github.sha }}' \
-          --message "v$VERSION" \
+          --message "v$VERSION_TO_PUBLISH" \
           --attach 'artifacts/docuum-x86_64-unknown-linux-gnu' \
           --attach 'artifacts/docuum-x86_64-unknown-linux-musl' \
           --attach 'artifacts/docuum-aarch64-unknown-linux-gnu' \
@@ -268,9 +278,10 @@ jobs:
           --attach 'artifacts/docuum-aarch64-apple-darwin' \
           --attach 'artifacts/docuum-x86_64-pc-windows-msvc.exe' \
           --attach 'artifacts/docuum-aarch64-pc-windows-msvc.exe' \
-          "v$VERSION"
-        echo "Created release v$VERSION."
-    - uses: stepchowfun/toast/.github/actions/toast@main
+          "v$VERSION_TO_PUBLISH"
+        echo "Created release v$VERSION_TO_PUBLISH."
+    - if: ${{ env.VERSION_TO_PUBLISH != null }}
+      uses: stepchowfun/toast/.github/actions/toast@main
       with:
         tasks: publish
         docker_repo: stephanmisc/toast
