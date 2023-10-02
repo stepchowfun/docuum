@@ -129,8 +129,8 @@ docker run \
   --rm \
   --tty \
   --name docuum \
-  --volume /var/run/docker.sock:/var/run/docker.sock \
-  --volume docuum:/root \
+  --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
+  --mount type=volume,source=docuum,target=/root \
   stephanmisc/docuum --threshold '10 GB'
 ```
 
@@ -142,8 +142,8 @@ docker run `
   --rm `
   --tty `
   --name docuum `
-  --volume //var/run/docker.sock:/var/run/docker.sock `
-  --volume docuum:/root `
+  --mount type=bind,src=//var/run/docker.sock,dst=/var/run/docker.sock `
+  --mount type=volume,source=docuum,target=/root `
   stephanmisc/docuum --threshold '10 GB'
 ```
 
