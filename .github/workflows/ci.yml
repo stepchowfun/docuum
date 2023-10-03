@@ -206,7 +206,7 @@ jobs:
         VERSION="$(cargo pkgid | cut -d# -f2 | cut -d: -f2)"
 
         # Determine if the release already exists.
-        if hub release show "v$VERSION" &> /dev/null; then
+        if gh release view "v$VERSION" &> /dev/null; then
           echo "Release v$VERSION already exists."
         else
           echo "VERSION_TO_PUBLISH=$VERSION" >> "$GITHUB_ENV"
@@ -269,18 +269,15 @@ jobs:
           "stephanmisc/docuum:$VERSION_TO_PUBLISH" --help
 
         # Create the release.
-        hub release create \
-          --commitish '${{ github.sha }}' \
-          --message "v$VERSION_TO_PUBLISH" \
-          --attach 'artifacts/docuum-x86_64-unknown-linux-gnu' \
-          --attach 'artifacts/docuum-x86_64-unknown-linux-musl' \
-          --attach 'artifacts/docuum-aarch64-unknown-linux-gnu' \
-          --attach 'artifacts/docuum-aarch64-unknown-linux-musl' \
-          --attach 'artifacts/docuum-x86_64-apple-darwin' \
-          --attach 'artifacts/docuum-aarch64-apple-darwin' \
-          --attach 'artifacts/docuum-x86_64-pc-windows-msvc.exe' \
-          --attach 'artifacts/docuum-aarch64-pc-windows-msvc.exe' \
-          "v$VERSION_TO_PUBLISH"
+        gh release create "v$VERSION" --title "v$VERSION" --notes '' \
+          'artifacts/docuum-x86_64-unknown-linux-gnu' \
+          'artifacts/docuum-x86_64-unknown-linux-musl' \
+          'artifacts/docuum-aarch64-unknown-linux-gnu' \
+          'artifacts/docuum-aarch64-unknown-linux-musl' \
+          'artifacts/docuum-x86_64-apple-darwin' \
+          'artifacts/docuum-aarch64-apple-darwin' \
+          'artifacts/docuum-x86_64-pc-windows-msvc.exe' \
+          'artifacts/docuum-aarch64-pc-windows-msvc.exe'
         echo "Created release v$VERSION_TO_PUBLISH."
     - uses: stepchowfun/toast/.github/actions/toast@main
       with:
