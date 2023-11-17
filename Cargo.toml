@@ -10,6 +10,11 @@ homepage = "https://github.com/stepchowfun/docuum"
 repository = "https://github.com/stepchowfun/docuum"
 readme = "README.md"
 
+[lints]
+clippy.all = "deny"
+clippy.pedantic = "deny"
+rust.warnings = "deny"
+
 [dependencies]
 atty = "0.2"
 byte-unit = "4"
