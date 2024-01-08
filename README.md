@@ -44,6 +44,9 @@ OPTIONS:
     -d, --deletion-chunk-size <DELETION CHUNK SIZE>
             Removes specified quantity of images at a time (default: 1)
 
+    -n, --dry-run
+            Dry run mode, prevents deletion of any images.
+
     -h, --help
             Prints help information
 
