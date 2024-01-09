@@ -63,7 +63,7 @@ impl Threshold {
                             )
                         })
                         .and_then(|f| {
-                            if f.is_normal() && (0.0..=100.0).contains(&f) {
+                            if f.is_normal() && (0.0_f64..=100.0_f64).contains(&f) {
                                 Ok(f)
                             } else {
                                 Err(io::Error::new(
