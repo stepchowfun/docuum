@@ -31,11 +31,13 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 const DEFAULT_DELETION_CHUNK_SIZE: usize = 1;
 const DEFAULT_LOG_LEVEL: LevelFilter = LevelFilter::Debug;
 const DEFAULT_THRESHOLD: &str = "10 GB";
+const DEFAULT_SINGLE_RUN: bool = false;
 
 // Command-line argument and option names
 const DELETION_CHUNK_SIZE_OPTION: &str = "deletion-chunk-size";
 const KEEP_OPTION: &str = "keep";
 const THRESHOLD_OPTION: &str = "threshold";
+const SINGLE_RUN: &str = "single-run";
 
 // Size threshold argument, absolute or relative to filesystem size
 #[derive(Copy, Clone)]
@@ -109,6 +111,7 @@ pub struct Settings {
     threshold: Threshold,
     keep: Option<RegexSet>,
     deletion_chunk_size: usize,
+    single_run: bool,
 }
 
 // Set up the logger.
@@ -197,6 +200,18 @@ fn settings() -> io::Result<Settings> {
                         (default: {DEFAULT_DELETION_CHUNK_SIZE})",
                 )),
         )
+        .arg(
+            Arg::with_name(SINGLE_RUN)
+                .value_name("SINGLE RUN")
+                .short("s")
+                .long(SINGLE_RUN)
+                .number_of_values(1)
+                .takes_value(false)
+                .help(&format!(
+                    "Run once then exit \
+                    (default: {DEFAULT_SINGLE_RUN})",
+                )),
+        )
         .get_matches();
 
     // Read the threshold.
@@ -225,10 +240,14 @@ fn settings() -> io::Result<Settings> {
         None => DEFAULT_DELETION_CHUNK_SIZE,
     };
 
+    // Determine if we should do a single run or a loop.
+    let single_run = matches.is_present(SINGLE_RUN);
+
     Ok(Settings {
         threshold,
         keep,
         deletion_chunk_size,
+        single_run,
     })
 }
 
