@@ -208,7 +208,7 @@ fn settings() -> io::Result<Settings> {
                 .number_of_values(1)
                 .takes_value(false)
                 .help(&format!(
-                    "Run once then exit \
+                    "Exits after first cleanup and doesn't wait for any more docker events \
                     (default: {DEFAULT_SINGLE_RUN})",
                 )),
         )
