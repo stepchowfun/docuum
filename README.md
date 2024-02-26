@@ -53,6 +53,9 @@ OPTIONS:
     -t, --threshold <THRESHOLD>
             Sets the maximum amount of space to be used for Docker images (default: 10 GB)
 
+    -s, --single_run <SINGLE_RUN>
+            Exits after first cleanup and doesn't wait for any more docker events (default: false)
+
     -v, --version
             Prints version information
 ```
