@@ -15,7 +15,7 @@ use {
         io::{self, BufRead, BufReader},
         mem::drop,
         ops::Deref,
-        process::{Command, Stdio},
+        process::{exit, Command, Stdio},
         time::{Duration, SystemTime, UNIX_EPOCH},
     },
 };
@@ -655,8 +655,7 @@ fn vacuum(
             for repository_tag in &image_node.image_record.repository_tags {
                 if regex_set.is_match(&format!(
                     "{}:{}",
-                    repository_tag.repository,
-                    repository_tag.tag,
+                    repository_tag.repository, repository_tag.tag,
                 )) {
                     debug!(
                         "Ignored image {} due to the {} flag.",
@@ -762,6 +761,11 @@ pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::
     )?;
     state::save(state)?;
     *first_run = false;
+
+    if settings.single_run {
+        info!("Single run. Exiting \u{2026}");
+        exit(0);
+    }
 
     // Spawn `docker events --format '{{json .}}'`.
     let mut child = guard(
