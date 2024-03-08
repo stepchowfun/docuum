@@ -61,6 +61,12 @@ The `--threshold` flag accepts [multiple representations](https://docs.rs/byte-u
 
 You can change the log verbosity by setting an environment variable named `LOG_LEVEL` to one of `trace`, `debug`, `info`, `warning`, or `error`. The default is `debug`.
 
+## Docker's build cache
+
+Old versions of Docker would create an intermediate image for each step in your `Dockerfile`, and Docuum would happily vacuum them when needed. Since the introduction of [BuildKit](https://docs.docker.com/build/buildkit/), Docker no longer produces those intermediate images, and a separate "build cache" is used instead. BuildKit has its own [garbage collector](https://docs.docker.com/build/cache/garbage-collection/) for its build cache with a default threshold of 10% of the total disk capacity.
+
+Docuum does not vacuum BuildKit's build cache, and BuildKit's garbage collector doesn't vacuum images. Both can be used together.
+
 ## Installation instructions
 
 Installation consists of two steps:
@@ -237,4 +243,3 @@ If you configured a path for the log file in the `I/O` tab of the installation w
 ## Requirements
 
 - Docuum requires [Docker Engine](https://www.docker.com/products/container-runtime) 17.03.0 or later.
-  - If you are using Docker Engine 18.09.0 or later with [BuildKit mode](https://docs.docker.com/develop/develop-images/build_enhancements/) enabled, Docker does not create intermediate images for each build step and instead uses a separate "build cache". Docuum will only clean up images, not the Buildkit build cache. BuildKit's built-in garbage collection feature can be used for the build cache (e.g., `docker builder prune --all --force --keep-storage '10 GB'`). If you are not using BuildKit mode, Docker's caching mechanism uses intermediate images, and Docuum will happily vacuum such images as usual.
