@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -euxo pipefail
 
 # See [ref:integration_test_step] for how to run this integration test.
 
