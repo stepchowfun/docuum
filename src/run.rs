@@ -4,7 +4,7 @@ use {
         state::{self, State},
         Settings, Threshold,
     },
-    byte_unit::Byte,
+    byte_unit::{Byte, ByteUnit},
     chrono::DateTime,
     regex::RegexSet,
     scopeguard::guard,
@@ -15,7 +15,7 @@ use {
         io::{self, BufRead, BufReader},
         mem::drop,
         ops::Deref,
-        process::{Command, Stdio},
+        process::{exit, Child, Command, Stdio},
         time::{Duration, SystemTime, UNIX_EPOCH},
     },
 };
@@ -85,6 +85,7 @@ struct ImageRecord {
     parent_id: Option<String>,
     created_since_epoch: Duration,
     repository_tags: Vec<RepositoryTag>, // [ref:at_least_one_repository_tag]
+    size: u128,
 }
 
 // This is a node in the image polyforest. Note that the image ID is not included here because this
@@ -94,6 +95,15 @@ struct ImageNode {
     image_record: ImageRecord,
     last_used_since_epoch: Duration,
     ancestors: usize, // 0 for images with no parent or missing parent
+}
+
+// Builds an image's name from as repository:tag
+fn image_name(image_record: &ImageRecord) -> String {
+    image_record
+        .repository_tags
+        .get(0)
+        .map(|r| format!("{}:{}", r.repository, r.tag))
+        .unwrap()
 }
 
 // Ask Docker for the ID of an image.
@@ -162,12 +172,12 @@ fn list_image_records(state: &State) -> io::Result<HashMap<String, ImageRecord>>
     // Get the IDs and creation timestamps of all the images.
     let output = Command::new("docker")
         .args([
-            "image",
-            "ls",
-            "--all",
-            "--no-trunc",
+            "system",
+            "df",
+            "-v",
             "--format",
-            "{{.ID}}\\t{{.Repository}}\\t{{.Tag}}\\t{{.CreatedAt}}",
+            "{{range .Images}}{{.ID}}\\t{{.Repository}}\\t\
+             {{.Tag}}\\t{{.CreatedAt}}\\t{{.UniqueSize}}\n{{end}}",
         ])
         .stderr(Stdio::inherit())
         .output()?;
@@ -193,13 +203,18 @@ fn list_image_records(state: &State) -> io::Result<HashMap<String, ImageRecord>>
         }
 
         let image_parts = trimmed_line.split('\t').collect::<Vec<_>>();
-        if let [id, repository, tag, date_str] = image_parts[..] {
+        if let [sha256_id, repository, tag, date_str, size] = image_parts[..] {
             let repository_tag = RepositoryTag {
                 repository: repository.to_owned(),
                 tag: tag.to_owned(),
             };
 
-            match image_records.entry(id.to_owned()) {
+            // The id is in the format:
+            // sha256:745895703263072416be27b333d19eff4494b287001f6c6adddd22b963a3429d
+            // We only want the first 12 characters of the hash.
+            let id = sha256_id.get(7..19).unwrap();
+
+            match image_records.entry(id.to_string()) {
                 Entry::Occupied(mut entry) => {
                     (entry.get_mut()).repository_tags.push(repository_tag);
                 }
@@ -208,6 +223,7 @@ fn list_image_records(state: &State) -> io::Result<HashMap<String, ImageRecord>>
                         parent_id: parent_id(state, id)?,
                         created_since_epoch: parse_docker_date(date_str)?,
                         repository_tags: vec![repository_tag],
+                        size: parse_docker_image_size(size),
                     });
                 }
             }
@@ -468,7 +484,13 @@ fn touch_image(state: &mut State, image_id: &str, verbose: bool) -> io::Result<b
     }
 }
 
-// Parse the non-standard timestamp format Docker uses for `docker image ls`.
+// Parse the Docker image size returned from `docker system df -v`
+// Example: 3.43GB or 73.1MB
+fn parse_docker_image_size(image_size: &str) -> u128 {
+    Byte::from_str(image_size).unwrap().get_bytes()
+}
+
+// Parse the non-standard timestamp format Docker uses for `docker system df -v`.
 // Example input: "2017-12-20 16:30:49 -0500 EST".
 fn parse_docker_date(timestamp: &str) -> io::Result<Duration> {
     // Chrono can't read the "EST", so remove it before parsing.
@@ -629,6 +651,7 @@ fn vacuum(
     threshold: Byte,
     keep: &Option<RegexSet>,
     deletion_chunk_size: usize,
+    dry_run: bool,
 ) -> io::Result<()> {
     // Find all images.
     let image_records = list_image_records(state)?;
@@ -681,29 +704,58 @@ fn vacuum(
             threshold.get_appropriate_unit(false).to_string().code_str(),
         );
 
-        // Start deleting images, beginning with the least recently used.
-        for image_ids in sorted_image_nodes.chunks_mut(deletion_chunk_size) {
-            for (image_id, _) in image_ids {
-                // Delete the image.
-                if let Err(error) = delete_image(image_id) {
-                    // The deletion failed. Just log the error and proceed.
-                    error!("{}", error);
-                } else {
-                    // Forget about the deleted image.
-                    deleted_image_ids.insert(image_id.clone());
+        // Create list of images to delete
+        let mut size_claimed = 0;
+        let mut images_to_delete = Vec::new();
+        'outer: for image_ids in sorted_image_nodes.chunks_mut(deletion_chunk_size) {
+            for (image_id, image_node) in image_ids {
+                info!(
+                    "Marking image for deletion ID: {} name: {} size: {}",
+                    image_id,
+                    image_name(&image_node.image_record),
+                    Byte::from(image_node.image_record.size)
+                        .get_adjusted_unit(ByteUnit::MB)
+                        .to_string(),
+                );
+                size_claimed += image_node.image_record.size;
+                images_to_delete.push(image_id);
+                if space.get_bytes() - size_claimed <= threshold.get_bytes() {
+                    break 'outer;
+                }
+            }
+        }
+
+        info!(
+            "We'll claim back {}/{}",
+            Byte::from(size_claimed)
+                .get_adjusted_unit(ByteUnit::MB)
+                .get_value()
+                .to_string()
+                .code_str(),
+            space.get_adjusted_unit(ByteUnit::MB).to_string().code_str(),
+        );
+
+        if !dry_run {
+            // Start deleting images, beginning with the least recently used.
+            for image_ids in images_to_delete.chunks(deletion_chunk_size) {
+                for image_id in image_ids {
+                    // Delete the image.
+                    if let Err(error) = delete_image(image_id) {
+                        // The deletion failed. Just log the error and proceed.
+                        error!("{}", error);
+                    } else {
+                        // Forget about the deleted image.
+                        deleted_image_ids.insert((**image_id).to_string());
+                    }
                 }
             }
 
-            // Break if we're within the threshold.
             let new_space = space_usage()?;
-            if new_space <= threshold {
-                info!(
-                    "Docker images are now using {}, which is within the limit of {}.",
-                    new_space.get_appropriate_unit(false).to_string().code_str(),
-                    threshold.get_appropriate_unit(false).to_string().code_str(),
-                );
-                break;
-            }
+            info!(
+                "Docker images are now using {}, which is within the limit of {}.",
+                new_space.get_appropriate_unit(false).to_string().code_str(),
+                threshold.get_appropriate_unit(false).to_string().code_str(),
+            );
         }
     } else {
         debug!(
@@ -713,10 +765,20 @@ fn vacuum(
         );
     }
 
-    // Update the state.
+    update_state(state, polyforest, &deleted_image_ids);
+
+    Ok(())
+}
+
+// Update the state.
+fn update_state(
+    state: &mut State,
+    polyforest: HashMap<String, ImageNode>,
+    deleted_image_ids: &HashSet<String>,
+) {
     state.images.clear();
     for (image_id, image_node) in polyforest {
-        if !deleted_image_ids.contains(&image_id) {
+        if !deleted_image_ids.contains(image_id.as_str()) {
             state.images.insert(
                 image_id.clone(),
                 state::Image {
@@ -726,10 +788,7 @@ fn vacuum(
             );
         }
     }
-
-    Ok(())
 }
-
 // Stream Docker events and vacuum when necessary.
 pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::Result<()> {
     // Determine the threshold in bytes.
@@ -759,21 +818,20 @@ pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::
         threshold,
         &settings.keep,
         settings.deletion_chunk_size,
+        settings.dry_run,
     )?;
     state::save(state)?;
     *first_run = false;
 
-    // Spawn `docker events --format '{{json .}}'`.
-    let mut child = guard(
-        Command::new("docker")
-            .args(["events", "--format", "{{json .}}"])
-            .stdout(Stdio::piped())
-            .spawn()?,
-        |mut child| {
-            drop(child.kill());
-            drop(child.wait());
-        },
-    );
+    if settings.dry_run {
+        info!("Exiting now since this is a sample dry-run.");
+        exit(0);
+    }
+
+    let mut child = guard(docker_events_listener()?, |mut child| {
+        drop(child.kill());
+        drop(child.wait());
+    });
 
     // Buffer the data as we read it line-by-line.
     let reader = BufReader::new(child.stdout.as_mut().map_or_else(
@@ -841,6 +899,7 @@ pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::
                 threshold,
                 &settings.keep,
                 settings.deletion_chunk_size,
+                settings.dry_run,
             )?;
         }
 
@@ -856,6 +915,14 @@ pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::
         io::ErrorKind::Other,
         format!("{} unexpectedly terminated.", "docker events".code_str()),
     ))
+}
+
+// Spawn `docker events --format '{{json .}}'`.
+fn docker_events_listener() -> io::Result<Child> {
+    Command::new("docker")
+        .args(["events", "--format", "{{json .}}"])
+        .stdout(Stdio::piped())
+        .spawn()
 }
 
 #[cfg(test)]
@@ -928,6 +995,7 @@ mod tests {
                 repository: String::from("alpine"),
                 tag: String::from("latest"),
             }],
+            size: 30000,
         };
 
         let mut image_records = HashMap::new();
@@ -962,6 +1030,7 @@ mod tests {
                 repository: String::from("alpine"),
                 tag: String::from("latest"),
             }],
+            size: 30000,
         };
 
         let mut image_records = HashMap::new();
@@ -1013,6 +1082,7 @@ mod tests {
                 repository: String::from("alpine"),
                 tag: String::from("latest"),
             }],
+            size: 30000,
         };
 
         let image_record_1 = ImageRecord {
@@ -1022,6 +1092,7 @@ mod tests {
                 repository: String::from("debian"),
                 tag: String::from("latest"),
             }],
+            size: 200_000,
         };
 
         let mut image_records = HashMap::new();
@@ -1083,6 +1154,7 @@ mod tests {
                 repository: String::from("alpine"),
                 tag: String::from("latest"),
             }],
+            size: 30000,
         };
 
         let image_record_1 = ImageRecord {
@@ -1092,6 +1164,7 @@ mod tests {
                 repository: String::from("debian"),
                 tag: String::from("latest"),
             }],
+            size: 200_000,
         };
 
         let mut image_records = HashMap::new();
@@ -1161,6 +1234,8 @@ mod tests {
                 repository: String::from("alpine"),
                 tag: String::from("latest"),
             }],
+
+            size: 30000,
         };
 
         let image_record_1 = ImageRecord {
@@ -1170,6 +1245,7 @@ mod tests {
                 repository: String::from("debian"),
                 tag: String::from("latest"),
             }],
+            size: 200_000,
         };
 
         let image_record_2 = ImageRecord {
@@ -1179,6 +1255,7 @@ mod tests {
                 repository: String::from("ubuntu"),
                 tag: String::from("latest"),
             }],
+            size: 300_000,
         };
 
         let mut image_records = HashMap::new();
@@ -1258,6 +1335,7 @@ mod tests {
                 repository: String::from("alpine"),
                 tag: String::from("latest"),
             }],
+            size: 30000,
         };
 
         let image_record_1 = ImageRecord {
@@ -1267,6 +1345,7 @@ mod tests {
                 repository: String::from("debian"),
                 tag: String::from("latest"),
             }],
+            size: 200_000,
         };
 
         let image_record_2 = ImageRecord {
@@ -1276,6 +1355,7 @@ mod tests {
                 repository: String::from("ubuntu"),
                 tag: String::from("latest"),
             }],
+            size: 300_000,
         };
 
         let mut image_records = HashMap::new();
@@ -1355,6 +1435,7 @@ mod tests {
                 repository: String::from("alpine"),
                 tag: String::from("latest"),
             }],
+            size: 30000,
         };
 
         let image_record_1 = ImageRecord {
@@ -1364,6 +1445,7 @@ mod tests {
                 repository: String::from("debian"),
                 tag: String::from("latest"),
             }],
+            size: 200_000,
         };
 
         let image_record_2 = ImageRecord {
@@ -1373,6 +1455,7 @@ mod tests {
                 repository: String::from("ubuntu"),
                 tag: String::from("latest"),
             }],
+            size: 300_000,
         };
 
         let mut image_records = HashMap::new();

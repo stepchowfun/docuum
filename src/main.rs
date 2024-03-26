@@ -35,6 +35,7 @@ const DEFAULT_THRESHOLD: &str = "10 GB";
 // Command-line argument and option names
 const DELETION_CHUNK_SIZE_OPTION: &str = "deletion-chunk-size";
 const KEEP_OPTION: &str = "keep";
+const DRY_RUN_OPTION: &str = "dry-run";
 const THRESHOLD_OPTION: &str = "threshold";
 
 // Size threshold argument, absolute or relative to filesystem size
@@ -109,6 +110,7 @@ pub struct Settings {
     threshold: Threshold,
     keep: Option<RegexSet>,
     deletion_chunk_size: usize,
+    dry_run: bool,
 }
 
 // Set up the logger.
@@ -187,6 +189,14 @@ fn settings() -> io::Result<Settings> {
                 .help("Prevents deletion of images for which repository:tag matches <REGEX>"),
         )
         .arg(
+            Arg::with_name(DRY_RUN_OPTION)
+                .short("n")
+                .long(DRY_RUN_OPTION)
+                .required(false)
+                .takes_value(false)
+                .help("Dry run mode, prevents deletion of any images."),
+        )
+        .arg(
             Arg::with_name(DELETION_CHUNK_SIZE_OPTION)
                 .value_name("DELETION CHUNK SIZE")
                 .short("d")
@@ -216,6 +226,11 @@ fn settings() -> io::Result<Settings> {
         None => None,
     };
 
+    let dry_run = matches.is_present(DRY_RUN_OPTION);
+    if dry_run {
+        info!("Dry-run mode enabled, will not be deleting images.");
+    }
+
     // Determine how many images to delete at once.
     let deletion_chunk_size = match matches.value_of(DELETION_CHUNK_SIZE_OPTION) {
         Some(v) => match v.parse::<usize>() {
@@ -229,6 +244,7 @@ fn settings() -> io::Result<Settings> {
         threshold,
         keep,
         deletion_chunk_size,
+        dry_run,
     })
 }
 
