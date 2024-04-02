@@ -203,7 +203,7 @@ fn settings() -> io::Result<Settings> {
             Arg::with_name(FAIL_FAST)
                 .short("f")
                 .long(FAIL_FAST)
-                .help("Prevents restarting subprocess"),
+                .help("Exits immediately on error instead of retrying"),
         )
         .get_matches();
 
@@ -280,10 +280,12 @@ fn main() {
         if let Err(e) = run(&settings, &mut state, &mut first_run) {
             error!("{}", e);
             if settings.fail_fast {
-                break;
+                error!("Exiting due to --fail-fast");
+                exit(1);
+            } else {
+                error!("Retrying in 5 seconds\u{2026}");
+                sleep(Duration::from_secs(5));
             }
-            info!("Retrying in 5 seconds\u{2026}");
-            sleep(Duration::from_secs(5));
         }
     }
 }

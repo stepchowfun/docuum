@@ -38,11 +38,14 @@ Here are the supported command-line options:
 
 ```
 USAGE:
-    docuum
+    docuum [OPTIONS]
 
 OPTIONS:
     -d, --deletion-chunk-size <DELETION CHUNK SIZE>
             Removes specified quantity of images at a time (default: 1)
+
+    -f, --fail-fast
+            Exits immediately on error instead of retrying
 
     -h, --help
             Prints help information
