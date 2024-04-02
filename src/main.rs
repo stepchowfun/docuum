@@ -233,6 +233,7 @@ fn settings() -> io::Result<Settings> {
         None => DEFAULT_DELETION_CHUNK_SIZE,
     };
 
+    // Determine whether to exit immediately on error.
     let fail_fast = matches.is_present(FAIL_FAST);
 
     Ok(Settings {
@@ -275,13 +276,15 @@ fn main() {
         |state| (state, false),
     );
 
-    // Stream Docker events and vacuum when necessary. Restart if an error occurs.
+    // Stream Docker events and vacuum when necessary.
     loop {
         if let Err(e) = run(&settings, &mut state, &mut first_run) {
             error!("{}", e);
+            // If we're in fail-fast mode, exit immediately.
             if settings.fail_fast {
                 error!("Exiting due to --fail-fast");
                 exit(1);
+            // Otherwise, retry after a short delay.
             } else {
                 error!("Retrying in 5 seconds\u{2026}");
                 sleep(Duration::from_secs(5));
