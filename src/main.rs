@@ -36,6 +36,7 @@ const DEFAULT_THRESHOLD: &str = "10 GB";
 const DELETION_CHUNK_SIZE_OPTION: &str = "deletion-chunk-size";
 const KEEP_OPTION: &str = "keep";
 const THRESHOLD_OPTION: &str = "threshold";
+const FAIL_FAST: &str = "fail-fast";
 
 // Size threshold argument, absolute or relative to filesystem size
 #[derive(Copy, Clone)]
@@ -109,6 +110,7 @@ pub struct Settings {
     threshold: Threshold,
     keep: Option<RegexSet>,
     deletion_chunk_size: usize,
+    fail_fast: bool,
 }
 
 // Set up the logger.
@@ -197,6 +199,12 @@ fn settings() -> io::Result<Settings> {
                         (default: {DEFAULT_DELETION_CHUNK_SIZE})",
                 )),
         )
+        .arg(
+            Arg::with_name(FAIL_FAST)
+                .short("f")
+                .long(FAIL_FAST)
+                .help("Prevents restarting subprocess"),
+        )
         .get_matches();
 
     // Read the threshold.
@@ -225,10 +233,13 @@ fn settings() -> io::Result<Settings> {
         None => DEFAULT_DELETION_CHUNK_SIZE,
     };
 
+    let fail_fast = matches.is_present(FAIL_FAST);
+
     Ok(Settings {
         threshold,
         keep,
         deletion_chunk_size,
+        fail_fast,
     })
 }
 
@@ -268,6 +279,9 @@ fn main() {
     loop {
         if let Err(e) = run(&settings, &mut state, &mut first_run) {
             error!("{}", e);
+            if settings.fail_fast {
+                break;
+            }
             info!("Retrying in 5 seconds\u{2026}");
             sleep(Duration::from_secs(5));
         }
