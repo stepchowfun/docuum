@@ -44,8 +44,8 @@ OPTIONS:
     -d, --deletion-chunk-size <DELETION CHUNK SIZE>
             Removes specified quantity of images at a time (default: 1)
 
-    -f, --fail-fast
-            Exits immediately on error instead of retrying
+    -f, --fail-on-docker-exit
+            Exits immediately on docker exit instead of restarting
 
     -h, --help
             Prints help information
