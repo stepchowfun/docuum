@@ -36,7 +36,7 @@ const DEFAULT_THRESHOLD: &str = "10 GB";
 const DELETION_CHUNK_SIZE_OPTION: &str = "deletion-chunk-size";
 const KEEP_OPTION: &str = "keep";
 const THRESHOLD_OPTION: &str = "threshold";
-const FAIL_FAST: &str = "fail-fast";
+const FAIL_ON_DOCKER_EXIT: &str = "fail-on-docker-exit";
 
 // Size threshold argument, absolute or relative to filesystem size
 #[derive(Copy, Clone)]
@@ -200,10 +200,10 @@ fn settings() -> io::Result<Settings> {
                 )),
         )
         .arg(
-            Arg::with_name(FAIL_FAST)
+            Arg::with_name(FAIL_ON_DOCKER_EXIT)
                 .short("f")
-                .long(FAIL_FAST)
-                .help("Exits immediately on error instead of retrying"),
+                .long(FAIL_ON_DOCKER_EXIT)
+                .help("Exits immediately on docker exit instead of restarting"),
         )
         .get_matches();
 
@@ -234,7 +234,7 @@ fn settings() -> io::Result<Settings> {
     };
 
     // Determine whether to exit immediately on error.
-    let fail_fast = matches.is_present(FAIL_FAST);
+    let fail_fast = matches.is_present(FAIL_ON_DOCKER_EXIT);
 
     Ok(Settings {
         threshold,
@@ -282,7 +282,7 @@ fn main() {
             error!("{}", e);
             // If we're in fail-fast mode, exit immediately.
             if settings.fail_fast {
-                error!("Exiting due to --fail-fast");
+                error!("Exiting due to --fail-on-docker-exit");
                 exit(1);
             // Otherwise, retry after a short delay.
             } else {
