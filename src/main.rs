@@ -110,7 +110,7 @@ pub struct Settings {
     threshold: Threshold,
     keep: Option<RegexSet>,
     deletion_chunk_size: usize,
-    fail_fast: bool,
+    fail_on_docker_exit: bool,
 }
 
 // Set up the logger.
@@ -240,7 +240,7 @@ fn settings() -> io::Result<Settings> {
         threshold,
         keep,
         deletion_chunk_size,
-        fail_fast,
+        fail_on_docker_exit: fail_fast,
     })
 }
 
@@ -280,8 +280,8 @@ fn main() {
     loop {
         if let Err(e) = run(&settings, &mut state, &mut first_run) {
             error!("{}", e);
-            // If we're in fail-fast mode, exit immediately.
-            if settings.fail_fast {
+            // If we're in fail-on-docker-exit mode, exit immediately.
+            if settings.fail_on_docker_exit {
                 error!("Exiting due to --fail-on-docker-exit");
                 exit(1);
             // Otherwise, retry after a short delay.
