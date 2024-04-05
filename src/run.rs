@@ -7,15 +7,14 @@ use {
     byte_unit::Byte,
     chrono::DateTime,
     regex::RegexSet,
-    scopeguard::guard,
     serde::{Deserialize, Serialize},
     std::{
         cmp::max,
         collections::{hash_map::Entry, HashMap, HashSet},
         io::{self, BufRead, BufReader},
-        mem::drop,
         ops::Deref,
         process::{Command, Stdio},
+        sync::{Arc, Mutex},
         time::{Duration, SystemTime, UNIX_EPOCH},
     },
 };
@@ -731,7 +730,13 @@ fn vacuum(
 }
 
 // Stream Docker events and vacuum when necessary.
-pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::Result<()> {
+#[allow(clippy::type_complexity)]
+pub fn run(
+    settings: &Settings,
+    state: &mut State,
+    first_run: &mut bool,
+    destructors: &Arc<Mutex<Vec<Box<dyn FnOnce() + Send>>>>,
+) -> io::Result<()> {
     // Determine the threshold in bytes.
     let threshold = match settings.threshold {
         Threshold::Absolute(b) => b,
@@ -764,27 +769,23 @@ pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::
     *first_run = false;
 
     // Spawn `docker events --format '{{json .}}'`.
-    let mut child = guard(
-        Command::new("docker")
-            .args(["events", "--format", "{{json .}}"])
-            .stdout(Stdio::piped())
-            .spawn()?,
-        |mut child| {
-            drop(child.kill());
-            drop(child.wait());
-        },
-    );
+    let mut child = Command::new("docker")
+        .args(["events", "--format", "{{json .}}"])
+        .stdout(Stdio::piped()) // [tag:stdout]
+        .spawn()?;
 
-    // Buffer the data as we read it line-by-line.
-    let reader = BufReader::new(child.stdout.as_mut().map_or_else(
-        || {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("Unable to read output from {}.", "docker events".code_str()),
-            ))
-        },
-        Ok,
-    )?);
+    // Buffer the data as we read it line-by-line. The `unwrap` is safe due to [ref:stdout].
+    let reader = BufReader::new(child.stdout.take().unwrap());
+
+    // When this run is done (e.g., due to an error) or when a termination signal is received, kill
+    // the child process.
+    destructors.lock().unwrap().push(Box::new(move || {
+        if let Err(error) = child.kill() {
+            error!("{}", error);
+        } else if let Err(error) = child.wait() {
+            error!("{}", error);
+        }
+    }));
 
     // Handle each incoming event.
     info!("Listening for Docker events\u{2026}");
@@ -854,7 +855,7 @@ pub fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::
     // The `for` loop above will only terminate if something happened to `docker events`.
     Err(io::Error::new(
         io::ErrorKind::Other,
-        format!("{} unexpectedly terminated.", "docker events".code_str()),
+        format!("{} terminated.", "docker events".code_str()),
     ))
 }
 
