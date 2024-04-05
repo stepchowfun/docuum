@@ -16,6 +16,7 @@ use {
         io::{self, Write},
         process::exit,
         str::FromStr,
+        sync::{Arc, Mutex},
         thread::sleep,
         time::Duration,
     },
@@ -231,8 +232,34 @@ fn settings() -> io::Result<Settings> {
     })
 }
 
+// This function consumes and runs all the registered destructors. We use this mechanism instead of
+// RAII for things that need to be cleaned up even when the process is killed due to a signal.
+#[allow(clippy::type_complexity)]
+fn run_destructors(destructors: &Arc<Mutex<Vec<Box<dyn FnOnce() + Send>>>>) {
+    let mut mutex_guard = destructors.lock().unwrap();
+    let destructor_fns = std::mem::take(&mut *mutex_guard);
+    for destructor in destructor_fns {
+        destructor();
+    }
+}
+
 // Let the fun begin!
 fn main() {
+    // If Docuum is in the foreground process group for some TTY, the process will receive a SIGINT
+    // when the user types CTRL+C at the terminal. The default behavior is to crash when this signal
+    // is received. However, we would rather clean up resources before terminating, so we trap the
+    // signal here. This code also traps SIGHUP and SIGTERM, since we compile the `ctrlc` crate with
+    // the `termination` feature [ref:ctrlc_term].
+    let destructors = Arc::new(Mutex::new(Vec::<Box<dyn FnOnce() + Send>>::new()));
+    let destructors_clone = destructors.clone();
+    if let Err(error) = ctrlc::set_handler(move || {
+        run_destructors(&destructors_clone);
+        exit(1);
+    }) {
+        // Log the error and proceed anyway.
+        error!("{}", error);
+    }
+
     // Determine whether to print colored output.
     colored::control::set_override(atty::is(Stream::Stderr));
 
@@ -265,10 +292,16 @@ fn main() {
 
     // Stream Docker events and vacuum when necessary. Restart if an error occurs.
     loop {
-        if let Err(e) = run(&settings, &mut state, &mut first_run) {
-            error!("{}", e);
-            info!("Retrying in 5 seconds\u{2026}");
-            sleep(Duration::from_secs(5));
+        // This will run until an error occurs (it never returns `Ok`).
+        if let Err(error) = run(&settings, &mut state, &mut first_run, &destructors) {
+            error!("{}", error);
         }
+
+        // Clean up any resources left over from that run.
+        run_destructors(&destructors);
+
+        // Wait a moment and then retry.
+        info!("Retrying in 5 seconds\u{2026}");
+        sleep(Duration::from_secs(5));
     }
 }
