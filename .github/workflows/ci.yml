@@ -274,7 +274,7 @@ jobs:
           "stephanmisc/docuum:$VERSION_TO_PUBLISH" --help
 
         # Create the release.
-        gh release create "v$VERSION" --title "v$VERSION" --notes '' \
+        gh release create "v$VERSION_TO_PUBLISH" --title "v$VERSION_TO_PUBLISH" --notes '' \
           'artifacts/docuum-x86_64-unknown-linux-gnu' \
           'artifacts/docuum-x86_64-unknown-linux-musl' \
           'artifacts/docuum-aarch64-unknown-linux-gnu' \
