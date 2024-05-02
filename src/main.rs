@@ -10,7 +10,7 @@ use {
     clap::{App, AppSettings, Arg},
     env_logger::{fmt::Color, Builder},
     log::{Level, LevelFilter},
-    regex::RegexSet,
+    regex::{Regex, RegexSet},
     std::{
         env,
         io::{self, Write},
@@ -269,6 +269,7 @@ fn settings() -> io::Result<Settings> {
         threshold,
         keep,
         deletion_chunk_size,
+        older_than,
     })
 }
 
