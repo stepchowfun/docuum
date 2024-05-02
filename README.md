@@ -53,6 +53,9 @@ OPTIONS:
     -t, --threshold <THRESHOLD>
             Sets the maximum amount of space to be used for Docker images (default: 10 GB)
 
+    -o, --older-than <OLDER THAN>
+            Sets the minimum age of images to be considered for deletion
+
     -v, --version
             Prints version information
 ```
