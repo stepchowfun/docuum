@@ -37,6 +37,7 @@ const DEFAULT_THRESHOLD: &str = "10 GB";
 const DELETION_CHUNK_SIZE_OPTION: &str = "deletion-chunk-size";
 const KEEP_OPTION: &str = "keep";
 const THRESHOLD_OPTION: &str = "threshold";
+const OLDER_THAN_OPTION: &str = "older-than";
 
 // Size threshold argument, absolute or relative to filesystem size
 #[derive(Copy, Clone)]
@@ -110,6 +111,7 @@ pub struct Settings {
     threshold: Threshold,
     keep: Option<RegexSet>,
     deletion_chunk_size: usize,
+    older_than: Option<Duration>,
 }
 
 // Set up the logger.
@@ -197,6 +199,13 @@ fn settings() -> io::Result<Settings> {
                         (default: {DEFAULT_DELETION_CHUNK_SIZE})",
                 )),
         )
+        .arg(
+            Arg::with_name(OLDER_THAN_OPTION)
+                .value_name("OLDER THAN")
+                .short("o")
+                .long(OLDER_THAN_OPTION)
+                .help("Specifies which images to delete based image creation time"),
+        )
         .get_matches();
 
     // Read the threshold.
@@ -223,6 +232,37 @@ fn settings() -> io::Result<Settings> {
             Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidInput, e)),
         },
         None => DEFAULT_DELETION_CHUNK_SIZE,
+    };
+
+    // validates the input argument parsed into --older-than, and converts the &str to a Duration
+    let older_than = match matches.value_of(OLDER_THAN_OPTION) {
+        Some(value) => {
+            let regex = Regex::new(r"(\d+)([smhd])").unwrap();
+            if regex.is_match(value) {
+                if let Some(captures) = regex.captures(value) {
+                    if let Some(matched_number) = captures.get(1) {
+                        let duration = matched_number.as_str().parse::<u64>().unwrap();
+
+                        let unit = value.chars().last().unwrap();
+            
+                        let duration = match unit {
+                            'm' => Duration::from_secs(duration * 60),
+                            'h' => Duration::from_secs(duration * 60 * 60),
+                            'd' => Duration::from_secs(duration * 60 * 60 * 24),
+                            _ => Duration::from_secs(duration), // unit = s
+                        };
+                        Some(duration)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        },
+        None => None,
     };
 
     Ok(Settings {
