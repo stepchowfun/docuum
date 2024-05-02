@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.25.0] - 2024-05-02
 
-### Fixed
+### Added
 - Added `--min-age` argument.
 
 ## [0.24.0] - 2024-04-05
