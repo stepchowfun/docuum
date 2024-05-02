@@ -628,7 +628,7 @@ fn vacuum(
     threshold: Byte,
     keep: &Option<RegexSet>,
     deletion_chunk_size: usize,
-    older_than: &Option<Duration>,
+    min_age: &Option<Duration>,
 ) -> io::Result<()> {
     // Find all images.
     let image_records = list_image_records(state)?;
@@ -672,12 +672,16 @@ fn vacuum(
     }
 
     // If the user provided the `--older-than` argument, we need to filter out images which are newer than the provided duration.
-    if let Some(duration) = older_than {
+    if let Some(duration) = min_age {
         let now = SystemTime::now();
-        let time_stamp = (now - *duration).duration_since(UNIX_EPOCH).unwrap();
-        sorted_image_nodes.retain(|(_, image_node)| {
-            image_node.last_used_since_epoch < time_stamp
-        });
+        match (now - *duration).duration_since(UNIX_EPOCH) {
+            Ok(time_stamp) => {
+                sorted_image_nodes.retain(|(_, image_node)| {
+                    image_node.last_used_since_epoch < time_stamp
+                });
+            },
+            Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidInput, e))
+        };
     }
 
     // Check if we're over the threshold.
@@ -774,7 +778,7 @@ pub fn run(
         threshold,
         &settings.keep,
         settings.deletion_chunk_size,
-        &settings.older_than,
+        &settings.min_age,
     )?;
     state::save(state)?;
     *first_run = false;
@@ -853,7 +857,7 @@ pub fn run(
                 threshold,
                 &settings.keep,
                 settings.deletion_chunk_size,
-                &settings.older_than,
+                &settings.min_age,
             )?;
         }
 
