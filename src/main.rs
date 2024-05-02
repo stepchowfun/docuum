@@ -202,8 +202,8 @@ fn settings() -> io::Result<Settings> {
         )
         .arg(
             Arg::with_name(MIN_AGE_OPTION)
-                .value_name("OLDER THAN")
-                .short("o")
+                .value_name("MIN AGE")
+                .short("m")
                 .long(MIN_AGE_OPTION)
                 .help("Specifies which images to delete based image creation time"),
         )
