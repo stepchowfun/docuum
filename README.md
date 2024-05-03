@@ -50,11 +50,11 @@ OPTIONS:
     -k, --keep <REGEX>...
             Prevents deletion of images for which repository:tag matches <REGEX>
 
-    -t, --threshold <THRESHOLD>
-            Sets the maximum amount of space to be used for Docker images (default: 10 GB)
-
     -m, --min-age <MIN AGE>
             Sets the minimum age of images to be considered for deletion
+
+    -t, --threshold <THRESHOLD>
+            Sets the maximum amount of space to be used for Docker images (default: 10 GB)
 
     -v, --version
             Prints version information
