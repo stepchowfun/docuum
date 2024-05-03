@@ -628,6 +628,7 @@ fn vacuum(
     threshold: Byte,
     keep: &Option<RegexSet>,
     deletion_chunk_size: usize,
+    min_age: &Option<Duration>,
 ) -> io::Result<()> {
     // Find all images.
     let image_records = list_image_records(state)?;
@@ -668,6 +669,29 @@ fn vacuum(
 
             true
         });
+    }
+
+    // If the `--min-age` argument is provided, we need to filter out images
+    // which are newer than the provided duration.
+    if let Some(duration) = min_age {
+        match (SystemTime::now() - *duration).duration_since(UNIX_EPOCH) {
+            Ok(time_stamp) => {
+                sorted_image_nodes.retain(|(image_id, image_node)| {
+                    if image_node.last_used_since_epoch > time_stamp {
+                        debug!(
+                            "Ignored image {} due to the {} flag.",
+                            image_id.code_str(),
+                            "--min-age".code_str(),
+                        );
+
+                        return false;
+                    }
+
+                    true
+                });
+            }
+            Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidInput, e)),
+        };
     }
 
     // Check if we're over the threshold.
@@ -764,6 +788,7 @@ pub fn run(
         threshold,
         &settings.keep,
         settings.deletion_chunk_size,
+        &settings.min_age,
     )?;
     state::save(state)?;
     *first_run = false;
@@ -842,6 +867,7 @@ pub fn run(
                 threshold,
                 &settings.keep,
                 settings.deletion_chunk_size,
+                &settings.min_age,
             )?;
         }
 
