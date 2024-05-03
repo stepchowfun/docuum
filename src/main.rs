@@ -20,7 +20,7 @@ use {
         sync::{Arc, Mutex},
         thread::sleep,
         time::Duration,
-    }
+    },
 };
 
 #[macro_use]

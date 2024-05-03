@@ -671,7 +671,8 @@ fn vacuum(
         });
     }
 
-    // If the user provided the `--min-age` argument, we need to filter out images which are newer than the provided duration.
+    // If the `--min-age` argument is provided, we need to filter out images
+    // which are newer than the provided duration.
     if let Some(duration) = min_age {
         match (SystemTime::now() - *duration).duration_since(UNIX_EPOCH) {
             Ok(time_stamp) => {
