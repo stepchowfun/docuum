@@ -3,22 +3,22 @@ mod run;
 mod state;
 
 use {
-    crate::{format::CodeStr, run::run}, 
-    atty::Stream, 
-    byte_unit::Byte, 
-    chrono::Local, 
-    clap::{App, AppSettings, Arg}, 
-    env_logger::{fmt::Color, Builder}, 
-    log::{Level, LevelFilter}, 
-    parse_duration::parse, 
-    regex::RegexSet, 
+    crate::{format::CodeStr, run::run},
+    atty::Stream,
+    byte_unit::Byte,
+    chrono::Local,
+    clap::{App, AppSettings, Arg},
+    env_logger::{fmt::Color, Builder},
+    log::{Level, LevelFilter},
+    parse_duration::parse,
+    regex::RegexSet,
     std::{
-        env, 
-        io::{self, Write}, 
-        process::exit, 
-        str::FromStr, 
-        sync::{Arc, Mutex}, 
-        thread::sleep, 
+        env,
+        io::{self, Write},
+        process::exit,
+        str::FromStr,
+        sync::{Arc, Mutex},
+        thread::sleep,
         time::Duration,
     }
 };
