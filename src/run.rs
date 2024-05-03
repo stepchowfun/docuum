@@ -680,7 +680,7 @@ fn vacuum(
                     if image_node.last_used_since_epoch > time_stamp {
                         debug!(
                             "Ignored image {} due to the {} flag.",
-                            image_id,
+                            image_id.code_str(),
                             "--min-age".code_str(),
                         );
 
