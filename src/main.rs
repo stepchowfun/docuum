@@ -13,7 +13,8 @@ use {
     parse_duration::parse, 
     regex::RegexSet, 
     std::{
-        env, io::{self, Write}, 
+        env, 
+        io::{self, Write}, 
         process::exit, 
         str::FromStr, 
         sync::{Arc, Mutex}, 
@@ -236,11 +237,9 @@ fn settings() -> io::Result<Settings> {
 
     // Determine the minimum age for images to be considered for deletion.
     let min_age = match matches.value_of(MIN_AGE_OPTION) {
-        Some(value) => {
-            match parse(value) {
-                Ok(duration) => Some(duration),
-                Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidInput, e)),
-            }
+        Some(value) => match parse(value) {
+            Ok(duration) => Some(duration),
+            Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidInput, e)),
         },
         None => None,
     };

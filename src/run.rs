@@ -675,9 +675,8 @@ fn vacuum(
     if let Some(duration) = min_age {
         match (SystemTime::now() - *duration).duration_since(UNIX_EPOCH) {
             Ok(time_stamp) => {
-                sorted_image_nodes.retain(|(_, image_node)| {
-                    image_node.last_used_since_epoch < time_stamp
-                });
+                sorted_image_nodes
+                    .retain(|(_, image_node)| image_node.last_used_since_epoch < time_stamp);
             },
             Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidInput, e))
         };
