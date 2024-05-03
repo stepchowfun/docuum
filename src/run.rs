@@ -677,8 +677,8 @@ fn vacuum(
             Ok(time_stamp) => {
                 sorted_image_nodes
                     .retain(|(_, image_node)| image_node.last_used_since_epoch < time_stamp);
-            },
-            Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidInput, e))
+            }
+            Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidInput, e)),
         };
     }
 

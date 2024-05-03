@@ -19,7 +19,7 @@ use {
         str::FromStr, 
         sync::{Arc, Mutex}, 
         thread::sleep, 
-        time::Duration
+        time::Duration,
     }
 };
 
