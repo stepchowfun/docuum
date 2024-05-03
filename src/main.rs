@@ -202,10 +202,10 @@ fn settings() -> io::Result<Settings> {
         )
         .arg(
             Arg::with_name(MIN_AGE_OPTION)
-                .value_name("MIN AGE")
+                .value_name("DURATION")
                 .short("m")
                 .long(MIN_AGE_OPTION)
-                .help("Specifies which images to delete based image creation time"),
+                .help("Sets the minimum age of images to be considered for deletion"),
         )
         .get_matches();
 
