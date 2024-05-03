@@ -37,8 +37,8 @@ const DEFAULT_THRESHOLD: &str = "10 GB";
 // Command-line argument and option names
 const DELETION_CHUNK_SIZE_OPTION: &str = "deletion-chunk-size";
 const KEEP_OPTION: &str = "keep";
-const THRESHOLD_OPTION: &str = "threshold";
 const MIN_AGE_OPTION: &str = "min-age";
+const THRESHOLD_OPTION: &str = "threshold";
 
 // Size threshold argument, absolute or relative to filesystem size
 #[derive(Copy, Clone)]
@@ -109,10 +109,10 @@ impl Threshold {
 
 // This struct represents the command-line arguments.
 pub struct Settings {
-    threshold: Threshold,
-    keep: Option<RegexSet>,
     deletion_chunk_size: usize,
+    keep: Option<RegexSet>,
     min_age: Option<Duration>,
+    threshold: Threshold,
 }
 
 // Set up the logger.
@@ -209,13 +209,14 @@ fn settings() -> io::Result<Settings> {
         )
         .get_matches();
 
-    // Read the threshold.
-    let default_threshold = Threshold::Absolute(
-        Byte::from_str(DEFAULT_THRESHOLD).unwrap(), // Manually verified safe
-    );
-    let threshold = matches
-        .value_of(THRESHOLD_OPTION)
-        .map_or_else(|| Ok(default_threshold), Threshold::from_str)?;
+    // Determine how many images to delete at once.
+    let deletion_chunk_size = match matches.value_of(DELETION_CHUNK_SIZE_OPTION) {
+        Some(v) => match v.parse::<usize>() {
+            Ok(chunk_size) => chunk_size,
+            Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidInput, e)),
+        },
+        None => DEFAULT_DELETION_CHUNK_SIZE,
+    };
 
     // Determine what images need to be preserved at all costs.
     let keep = match matches.values_of(KEEP_OPTION) {
@@ -224,15 +225,6 @@ fn settings() -> io::Result<Settings> {
             Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidInput, e)),
         },
         None => None,
-    };
-
-    // Determine how many images to delete at once.
-    let deletion_chunk_size = match matches.value_of(DELETION_CHUNK_SIZE_OPTION) {
-        Some(v) => match v.parse::<usize>() {
-            Ok(chunk_size) => chunk_size,
-            Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidInput, e)),
-        },
-        None => DEFAULT_DELETION_CHUNK_SIZE,
     };
 
     // Determine the minimum age for images to be considered for deletion.
@@ -244,11 +236,19 @@ fn settings() -> io::Result<Settings> {
         None => None,
     };
 
+    // Read the threshold.
+    let default_threshold = Threshold::Absolute(
+        Byte::from_str(DEFAULT_THRESHOLD).unwrap(), // Manually verified safe
+    );
+    let threshold = matches
+        .value_of(THRESHOLD_OPTION)
+        .map_or_else(|| Ok(default_threshold), Threshold::from_str)?;
+
     Ok(Settings {
-        threshold,
-        keep,
         deletion_chunk_size,
+        keep,
         min_age,
+        threshold,
     })
 }
 
