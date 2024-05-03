@@ -676,16 +676,13 @@ fn vacuum(
     if let Some(duration) = min_age {
         match (SystemTime::now() - *duration).duration_since(UNIX_EPOCH) {
             Ok(time_stamp) => {
-                sorted_image_nodes.retain(|(_, image_node)| {
+                sorted_image_nodes.retain(|(image_id, image_node)| {
                     if image_node.last_used_since_epoch > time_stamp {
-                        for repository_tag in &image_node.image_record.repository_tags {
-                            debug!(
-                                "Ignored image {} due to the {} flag.",
-                                format!("{}:{}", repository_tag.repository, repository_tag.tag)
-                                    .code_str(),
-                                "--min-age".code_str(),
-                            );
-                        }
+                        debug!(
+                            "Ignored image {} due to the {} flag.",
+                            image_id,
+                            "--min-age".code_str(),
+                        );
 
                         return false;
                     }
