@@ -3,24 +3,9 @@ mod run;
 mod state;
 
 use {
-    crate::{format::CodeStr, run::run},
-    atty::Stream,
-    byte_unit::Byte,
-    chrono::Local,
-    clap::{App, AppSettings, Arg},
-    env_logger::{fmt::Color, Builder},
-    log::{Level, LevelFilter},
-    regex::{Regex, RegexSet},
-    parse_duration::parse,
-    std::{
-        env,
-        io::{self, Write},
-        process::exit,
-        str::FromStr,
-        sync::{Arc, Mutex},
-        thread::sleep,
-        time::Duration,
-    },
+    crate::{format::CodeStr, run::run}, atty::Stream, byte_unit::Byte, chrono::Local, clap::{App, AppSettings, Arg}, env_logger::{fmt::Color, Builder}, log::{Level, LevelFilter}, parse_duration::parse, regex::RegexSet, std::{
+        env, io::{self, Write}, process::exit, str::FromStr, sync::{Arc, Mutex}, thread::sleep, time::Duration
+    }
 };
 
 #[macro_use]
@@ -235,17 +220,12 @@ fn settings() -> io::Result<Settings> {
         None => DEFAULT_DELETION_CHUNK_SIZE,
     };
 
-    // validates the input argument parsed into --min-age and converts input to a duration
+    // Determine the minimum age for images to be considered for deletion.
     let min_age = match matches.value_of(MIN_AGE_OPTION) {
         Some(value) => {
-            let regex = Regex::new(r"(\d+)([smhd])").unwrap();
-            if regex.is_match(value) {
-                match parse(value) {
-                    Ok(duration) => Some(duration),
-                    Err(_) => None
-                }
-            } else {
-                None
+            match parse(value) {
+                Ok(duration) => Some(duration),
+                Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidInput, e)),
             }
         },
         None => None,
