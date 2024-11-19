@@ -1,5 +1,5 @@
 # The base image for the build stage
-FROM --platform=$BUILDPLATFORM alpine:3.15 AS build
+FROM --platform=$BUILDPLATFORM alpine:3.20 AS build
 
 # Choose the appropriate Docuum binary to install.
 ARG TARGETPLATFORM
@@ -8,7 +8,7 @@ COPY artifacts/docuum-aarch64-unknown-linux-musl /tmp/linux/arm64
 RUN cp "/tmp/$TARGETPLATFORM" /usr/local/bin/docuum
 
 # A minimal base image
-FROM --platform=$TARGETPLATFORM alpine:3.15
+FROM --platform=$TARGETPLATFORM alpine:3.20
 
 # Install the Docker CLI.
 RUN apk add --no-cache docker-cli
