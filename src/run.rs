@@ -626,9 +626,9 @@ fn vacuum(
     state: &mut State,
     first_run: bool,
     threshold: Byte,
-    keep: &Option<RegexSet>,
+    keep: Option<&RegexSet>,
     deletion_chunk_size: usize,
-    min_age: &Option<Duration>,
+    min_age: Option<Duration>,
 ) -> io::Result<()> {
     // Find all images.
     let image_records = list_image_records(state)?;
@@ -674,7 +674,7 @@ fn vacuum(
     // If the `--min-age` argument is provided, we need to filter out images
     // which are newer than the provided duration.
     if let Some(duration) = min_age {
-        match (SystemTime::now() - *duration).duration_since(UNIX_EPOCH) {
+        match (SystemTime::now() - duration).duration_since(UNIX_EPOCH) {
             Ok(time_stamp) => {
                 sorted_image_nodes.retain(|(image_id, image_node)| {
                     if image_node.last_used_since_epoch > time_stamp {
@@ -786,9 +786,9 @@ pub fn run(
         state,
         *first_run,
         threshold,
-        &settings.keep,
+        settings.keep.as_ref(),
         settings.deletion_chunk_size,
-        &settings.min_age,
+        settings.min_age,
     )?;
     state::save(state)?;
     *first_run = false;
@@ -865,9 +865,9 @@ pub fn run(
                 state,
                 *first_run,
                 threshold,
-                &settings.keep,
+                settings.keep.as_ref(),
                 settings.deletion_chunk_size,
-                &settings.min_age,
+                settings.min_age,
             )?;
         }
 
