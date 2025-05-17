@@ -1,8 +1,8 @@
 use {
     crate::{
+        Settings, Threshold,
         format::CodeStr,
         state::{self, State},
-        Settings, Threshold,
     },
     byte_unit::Byte,
     chrono::DateTime,
@@ -10,7 +10,7 @@ use {
     serde::{Deserialize, Serialize},
     std::{
         cmp::max,
-        collections::{hash_map::Entry, HashMap, HashSet},
+        collections::{HashMap, HashSet, hash_map::Entry},
         io::{self, BufRead, BufReader},
         ops::Deref,
         process::{Command, Stdio},
@@ -105,16 +105,16 @@ fn image_id(image: &str) -> io::Result<String> {
 
     // Ensure the command succeeded.
     if !output.status.success() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!("Unable to determine ID of image {}.", image.code_str()),
-        ));
+        return Err(io::Error::other(format!(
+            "Unable to determine ID of image {}.",
+            image.code_str(),
+        )));
     }
 
     // Interpret the output bytes as UTF-8 and trim any leading/trailing whitespace.
     String::from_utf8(output.stdout)
         .map(|output| output.trim().to_owned())
-        .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
+        .map_err(io::Error::other)
 }
 
 // Get the ID of the parent of an image (if the parent exists), querying Docker if necessary.
@@ -132,13 +132,10 @@ fn parent_id(state: &State, image_id: &str) -> io::Result<Option<String>> {
 
     // Ensure the command succeeded.
     if !output.status.success() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!(
-                "Unable to determine ID of the parent of image {}.",
-                image_id.code_str(),
-            ),
-        ));
+        return Err(io::Error::other(format!(
+            "Unable to determine ID of the parent of image {}.",
+            image_id.code_str(),
+        )));
     }
 
     // Interpret the output bytes as UTF-8 and trim any leading/trailing whitespace.
@@ -153,7 +150,7 @@ fn parent_id(state: &State, image_id: &str) -> io::Result<Option<String>> {
                 Some(trimmed_output.to_owned())
             }
         })
-        .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
+        .map_err(io::Error::other)
 }
 
 // Query Docker for all the images.
@@ -173,16 +170,13 @@ fn list_image_records(state: &State) -> io::Result<HashMap<String, ImageRecord>>
 
     // Ensure the command succeeded.
     if !output.status.success() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Unable to list images.",
-        ));
+        return Err(io::Error::other("Unable to list images."));
     }
 
     // Interpret the output bytes as UTF-8 and parse the lines.
     let mut image_records = HashMap::<_, ImageRecord>::new();
     for line in String::from_utf8(output.stdout)
-        .map_err(|error| io::Error::new(io::ErrorKind::Other, error))?
+        .map_err(io::Error::other)?
         .lines()
     {
         let trimmed_line = line.trim();
@@ -211,8 +205,7 @@ fn list_image_records(state: &State) -> io::Result<HashMap<String, ImageRecord>>
                 }
             }
         } else {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
+            return Err(io::Error::other(
                 "Failed to parse image list output from Docker.",
             ));
         }
@@ -238,15 +231,14 @@ fn image_ids_in_use() -> io::Result<HashSet<String>> {
 
     // Ensure the command succeeded.
     if !container_ids_output.status.success() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
+        return Err(io::Error::other(
             "Unable to determine IDs of images currently in use by containers.",
         ));
     }
 
     // Interpret the output bytes as UTF-8 and parse the lines.
     let container_ids = String::from_utf8(container_ids_output.stdout)
-        .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
+        .map_err(io::Error::other)
         .map(|output| {
             output
                 .lines()
@@ -278,8 +270,7 @@ fn image_ids_in_use() -> io::Result<HashSet<String>> {
 
         // Ensure the command succeeded.
         if !image_ids_output.status.success() {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
+            return Err(io::Error::other(
                 "Unable to determine IDs of images currently in use by containers.",
             ));
         }
@@ -287,7 +278,7 @@ fn image_ids_in_use() -> io::Result<HashSet<String>> {
         // Interpret the output bytes as UTF-8 and parse the lines.
         image_ids.extend(
             String::from_utf8(image_ids_output.stdout)
-                .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
+                .map_err(io::Error::other)
                 .map(|output| {
                     output
                         .lines()
@@ -319,8 +310,7 @@ fn docker_root_dir() -> io::Result<PathBuf> {
 
     // Ensure the command succeeded.
     if !output.status.success() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
+        return Err(io::Error::other(
             "Unable to determine the Docker root directory.",
         ));
     }
@@ -328,7 +318,7 @@ fn docker_root_dir() -> io::Result<PathBuf> {
     // Trim the output.
     String::from_utf8(output.stdout)
         .map(|s| PathBuf::from(s.trim()))
-        .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
+        .map_err(io::Error::other)
 }
 
 // Find the disk containing a path.
@@ -339,13 +329,10 @@ fn get_disk_by_file<'a>(disks: &'a [Disk], path: &Path) -> io::Result<&'a Disk> 
         .filter(|d| path.starts_with(d.mount_point()))
         .max_by_key(|d| d.mount_point().as_os_str().len())
         .ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!(
-                    "Unable to find disk for path {}.",
-                    path.to_string_lossy().code_str(),
-                ),
-            )
+            io::Error::other(format!(
+                "Unable to find disk for path {}.",
+                path.to_string_lossy().code_str(),
+            ))
         })
 }
 
@@ -370,15 +357,14 @@ fn space_usage() -> io::Result<Byte> {
 
     // Ensure the command succeeded.
     if !output.status.success() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
+        return Err(io::Error::other(
             "Unable to determine the disk space used by Docker images.",
         ));
     }
 
     // Find the relevant line of output.
     String::from_utf8(output.stdout)
-        .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
+        .map_err(io::Error::other)
         .and_then(|output| {
             for line in output.lines() {
                 // Parse the line as a space record.
@@ -386,27 +372,21 @@ fn space_usage() -> io::Result<Byte> {
                     // Return early if we found the record we're looking for.
                     if space_record.r#type == "Images" {
                         return Byte::from_str(&space_record.size).map_err(|_| {
-                            io::Error::new(
-                                io::ErrorKind::Other,
-                                format!(
-                                    "Unable to parse {} from {}.",
-                                    space_record.size.code_str(),
-                                    "docker system df".code_str(),
-                                ),
-                            )
+                            io::Error::other(format!(
+                                "Unable to parse {} from {}.",
+                                space_record.size.code_str(),
+                                "docker system df".code_str(),
+                            ))
                         });
                     }
                 }
             }
 
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!(
-                    "Unable to parse output of {}: {}",
-                    "docker system df".code_str(),
-                    output.code_str(),
-                ),
-            ))
+            Err(io::Error::other(format!(
+                "Unable to parse output of {}: {}",
+                "docker system df".code_str(),
+                output.code_str(),
+            )))
         })
 }
 
@@ -421,10 +401,10 @@ fn delete_image(image: &str) -> io::Result<()> {
 
     // Ensure the command succeeded.
     if !child.wait()?.success() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!("Unable to delete image {}.", image.code_str()),
-        ));
+        return Err(io::Error::other(format!(
+            "Unable to delete image {}.",
+            image.code_str(),
+        )));
     }
 
     Ok(())
@@ -460,10 +440,9 @@ fn touch_image(state: &mut State, image_id: &str, verbose: bool) -> io::Result<b
                 )
                 .is_none())
         }
-        Err(error) => Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!("Unable to compute the current timestamp: {error:?}."),
-        )),
+        Err(error) => Err(io::Error::other(format!(
+            "Unable to compute the current timestamp: {error:?}.",
+        ))),
     }
 }
 
@@ -471,10 +450,11 @@ fn touch_image(state: &mut State, image_id: &str, verbose: bool) -> io::Result<b
 // Example input: "2017-12-20 16:30:49 -0500 EST".
 fn parse_docker_date(timestamp: &str) -> io::Result<Duration> {
     // Chrono can't read the "EST", so remove it before parsing.
-    let timestamp_without_timezone_triad =
-        timestamp.trim().rsplitn(2, ' ').last().ok_or_else(|| {
-            io::Error::new(io::ErrorKind::Other, "Failed to remove timezone string.")
-        })?;
+    let timestamp_without_timezone_triad = timestamp
+        .trim()
+        .rsplitn(2, ' ')
+        .last()
+        .ok_or_else(|| io::Error::other("Failed to remove timezone string."))?;
 
     // Parse the date and convert it into a duration since the UNIX epoch.
     let duration =
@@ -482,7 +462,7 @@ fn parse_docker_date(timestamp: &str) -> io::Result<Duration> {
             Ok(datetime) => {
                 datetime.signed_duration_since::<chrono::offset::Utc>(DateTime::from(UNIX_EPOCH))
             }
-            Err(error) => return Err(io::Error::new(io::ErrorKind::Other, error)),
+            Err(error) => return Err(io::Error::other(error)),
         };
 
     // Convert the duration into a `std::time::Duration`. If the duration is negative, it will be
@@ -501,10 +481,9 @@ fn construct_polyforest(
     // Compute the current timestamp.
     let time_since_epoch = match SystemTime::now().duration_since(UNIX_EPOCH) {
         Ok(duration) => Ok(duration),
-        Err(error) => Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!("Unable to compute the current timestamp: {error:?}."),
-        )),
+        Err(error) => Err(io::Error::other(format!(
+            "Unable to compute the current timestamp: {error:?}.",
+        ))),
     }?;
 
     // Construct the graph. It's a map, just like `image_records`, except the values are
@@ -691,7 +670,7 @@ fn vacuum(
                 });
             }
             Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidInput, e)),
-        };
+        }
     }
 
     // Check if we're over the threshold.
@@ -879,16 +858,16 @@ pub fn run(
     }
 
     // The `for` loop above will only terminate if something happened to `docker events`.
-    Err(io::Error::new(
-        io::ErrorKind::Other,
-        format!("{} terminated.", "docker events".code_str()),
-    ))
+    Err(io::Error::other(format!(
+        "{} terminated.",
+        "docker events".code_str(),
+    )))
 }
 
 #[cfg(test)]
 mod tests {
     use {
-        super::{construct_polyforest, parse_docker_date, ImageNode, ImageRecord, RepositoryTag},
+        super::{ImageNode, ImageRecord, RepositoryTag, construct_polyforest, parse_docker_date},
         crate::state::{self, State},
         std::{
             collections::{HashMap, HashSet},

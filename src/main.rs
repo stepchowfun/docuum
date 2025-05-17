@@ -8,7 +8,7 @@ use {
     byte_unit::Byte,
     chrono::Local,
     clap::{App, AppSettings, Arg},
-    env_logger::{fmt::Color, Builder},
+    env_logger::{Builder, fmt::Color},
     log::{Level, LevelFilter},
     parse_duration::parse,
     regex::RegexSet,
