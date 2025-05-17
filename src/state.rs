@@ -66,13 +66,10 @@ pub fn load() -> io::Result<State> {
         let yaml = read_to_string(path)?;
 
         // Deserialize the YAML.
-        serde_yaml::from_str(&yaml).map_err(|error| io::Error::new(io::ErrorKind::Other, error))
+        serde_yaml::from_str(&yaml).map_err(io::Error::other)
     } else {
         // Fail if we don't have a path.
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Unable to locate data directory.",
-        ))
+        Err(io::Error::other("Unable to locate data directory."))
     }
 }
 
@@ -102,10 +99,7 @@ pub fn save(state: &State) -> io::Result<()> {
         temp_file.persist(path)?;
     } else {
         // Fail if we don't have a path.
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Unable to locate data directory.",
-        ));
+        return Err(io::Error::other("Unable to locate data directory."));
     }
 
     Ok(())
