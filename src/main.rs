@@ -9,8 +9,8 @@ use {
     chrono::Local,
     clap::{App, AppSettings, Arg},
     env_logger::{Builder, fmt::Color},
+    humantime::parse_duration,
     log::{Level, LevelFilter},
-    parse_duration::parse,
     regex::RegexSet,
     std::{
         env,
@@ -229,8 +229,15 @@ fn settings() -> io::Result<Settings> {
 
     // Determine the minimum age for images to be considered for deletion.
     let min_age = match matches.value_of(MIN_AGE_OPTION) {
-        Some(value) => match parse(value) {
-            Ok(duration) => Some(duration),
+        Some(value) => match parse_duration(value) {
+            Ok(duration) => {
+                debug!(
+                    "{} parsed as {:?}.",
+                    format!("--{MIN_AGE_OPTION}").code_str(),
+                    duration,
+                );
+                Some(duration)
+            }
             Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidInput, e)),
         },
         None => None,
