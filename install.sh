@@ -73,12 +73,12 @@
   # Remove the temporary directory.
   rm -rf "$TEMPDIR"
 
-  # If SElinux is installed, try to restore attributes
+  # If SELinux is installed, apply the default security context to the binary.
   # shellcheck disable=SC2024
-  if command -v restorecon > /dev/null; then
+  if command -v restorecon 2> /dev/null; then
     restorecon "$DESTINATION" 2> /dev/null ||
-     sudo restorecon "$DESTINATION" < /dev/tty ||
-       echo 'Failed to restore SELinux attributes, this may or may not be a problem.'
+    sudo restorecon "$DESTINATION" < /dev/tty ||
+    fail 'Failed to set SELinux attributes on the binary.'
   fi
 
   # Let the user know if the installation was successful.
