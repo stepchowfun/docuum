@@ -222,6 +222,18 @@ fn image_ids_in_use() -> io::Result<HashSet<String>> {
             "container",
             "ls",
             "--all",
+            "--filter",
+            "status=created",
+            "--filter",
+            "status=restarting",
+            "--filter",
+            "status=running",
+            "--filter",
+            "status=paused",
+            "--filter",
+            "status=exited",
+            "--filter",
+            "status=dead",
             "--no-trunc",
             "--format",
             "{{.ID}}",
@@ -231,9 +243,7 @@ fn image_ids_in_use() -> io::Result<HashSet<String>> {
 
     // Ensure the command succeeded.
     if !container_ids_output.status.success() {
-        return Err(io::Error::other(
-            "Unable to determine IDs of images currently in use by containers.",
-        ));
+        return Err(io::Error::other("Unable to list containers."));
     }
 
     // Interpret the output bytes as UTF-8 and parse the lines.
