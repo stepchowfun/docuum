@@ -29,6 +29,22 @@ use {
 // maximum number of container IDs to query at once.
 const CONTAINER_IDS_CHUNK_SIZE: usize = 100;
 
+// [tag:container_status_removing] The `docker container inspect` command seems to fail on
+// containers with this status. Source: https://github.com/stepchowfun/docuum/issues/237
+const CONTAINER_STATUS_REMOVING: &str = "removing";
+
+// These are all the possible statuses returned from `docker container ls`. Source:
+//   https://docs.docker.com/reference/cli/docker/container/ls/#status
+const CONTAINER_STATUSES: [&str; 7] = [
+    "created",
+    "dead",
+    "exited",
+    "paused",
+    "restarting",
+    "running",
+    CONTAINER_STATUS_REMOVING,
+];
+
 // A Docker event (a line of output from `docker events --format '{{json .}}'`)
 #[derive(Deserialize, Serialize, Debug)]
 struct Event {
@@ -218,26 +234,23 @@ fn list_image_records(state: &State) -> io::Result<HashMap<String, ImageRecord>>
 fn image_ids_in_use() -> io::Result<HashSet<String>> {
     // Query Docker for all the container IDs.
     let container_ids_output = Command::new("docker")
-        .args([
-            "container",
-            "ls",
-            "--all",
-            "--filter",
-            "status=created",
-            "--filter",
-            "status=restarting",
-            "--filter",
-            "status=running",
-            "--filter",
-            "status=paused",
-            "--filter",
-            "status=exited",
-            "--filter",
-            "status=dead",
-            "--no-trunc",
-            "--format",
-            "{{.ID}}",
-        ])
+        .args(
+            ["container", "ls", "--all"]
+                .into_iter()
+                .map(std::string::ToString::to_string)
+                .chain(
+                    CONTAINER_STATUSES
+                        .iter()
+                        .filter(|&&status| status != CONTAINER_STATUS_REMOVING)
+                        .flat_map(|&status| [String::from("--filter"), format!("status={status}")]),
+                )
+                .chain(
+                    ["--no-trunc", "--format", "{{.ID}}"]
+                        .into_iter()
+                        .map(std::string::ToString::to_string),
+                )
+                .collect::<Vec<String>>(),
+        )
         .stderr(Stdio::inherit())
         .output()?;
 
