@@ -603,16 +603,15 @@ fn construct_polyforest(
         let mut new_frontier = HashSet::new();
 
         for image_id in frontier {
-            if let Some(image_node) = polyforest.get(&image_id).cloned() {
-                if let Some(parent_id) = &image_node.image_record.parent_id {
-                    if let Some(parent_node) = polyforest.get_mut(parent_id) {
-                        parent_node.last_used_since_epoch = max(
-                            parent_node.last_used_since_epoch,
-                            image_node.last_used_since_epoch,
-                        );
-                        new_frontier.insert(parent_id.clone());
-                    }
-                }
+            if let Some(image_node) = polyforest.get(&image_id).cloned()
+                && let Some(parent_id) = &image_node.image_record.parent_id
+                && let Some(parent_node) = polyforest.get_mut(parent_id)
+            {
+                parent_node.last_used_since_epoch = max(
+                    parent_node.last_used_since_epoch,
+                    image_node.last_used_since_epoch,
+                );
+                new_frontier.insert(parent_id.clone());
             }
         }
 
