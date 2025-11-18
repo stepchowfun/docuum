@@ -1,5 +1,6 @@
 use {
     crate::format::CodeStr,
+    log::trace,
     serde::{Deserialize, Serialize},
     std::{
         collections::HashMap,
