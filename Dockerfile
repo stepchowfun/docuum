@@ -1,21 +1,47 @@
-# The base image for the build stage
-FROM --platform=$BUILDPLATFORM alpine:3.20 AS build
+FROM --platform=$BUILDPLATFORM ubuntu AS builder
+ENV HOME="/root"
+WORKDIR $HOME
 
-# Choose the appropriate Docuum binary to install.
+RUN apt update \
+  && apt install -y --no-install-recommends \
+  build-essential \
+  curl \
+  python3-venv \
+  && apt clean \
+  && rm -rf /var/lib/apt/lists/*
+
+# Setup zig as cross compiling linker
+RUN python3 -m venv $HOME/.venv
+RUN .venv/bin/pip install cargo-zigbuild
+ENV PATH="$HOME/.venv/bin:$PATH"
+
+# Install rust
 ARG TARGETPLATFORM
-COPY artifacts/docuum-x86_64-unknown-linux-musl /tmp/linux/amd64
-COPY artifacts/docuum-aarch64-unknown-linux-musl /tmp/linux/arm64
-RUN cp "/tmp/$TARGETPLATFORM" /usr/local/bin/docuum
+RUN case "$TARGETPLATFORM" in \
+  "linux/arm64") echo "aarch64-unknown-linux-musl" > rust_target.txt ;; \
+  "linux/amd64") echo "x86_64-unknown-linux-musl" > rust_target.txt ;; \
+  *) exit 1 ;; \
+  esac
 
-# A minimal base image
-FROM --platform=$TARGETPLATFORM alpine:3.20
+# Update rustup whenever we bump the rust version
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --target $(cat rust_target.txt) --profile minimal --default-toolchain none
+ENV PATH="$HOME/.cargo/bin:$PATH"
+# Install the toolchain then the musl target
+RUN rustup toolchain install stable
+RUN rustup target add $(cat rust_target.txt)
 
-# Install the Docker CLI.
-RUN apk add --no-cache docker-cli
+# Build
+COPY . .
+RUN cargo zigbuild --bin docuum --target $(cat rust_target.txt) --release
+RUN cp target/$(cat rust_target.txt)/release/docuum /docuum
+
+# A distroless base image
+FROM scratch
+WORKDIR /app
 
 # Install Docuum.
-COPY --from=build /usr/local/bin/docuum /usr/local/bin/docuum
+COPY --from=builder /docuum .
 
 # Set the entrypoint to Docuum. Note that Docuum is not intended to be run as
 # an init process, so be sure to pass `--init` to `docker run`.
-ENTRYPOINT ["/usr/local/bin/docuum"]
+ENTRYPOINT ["/app/docuum"]
