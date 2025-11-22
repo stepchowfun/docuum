@@ -472,6 +472,7 @@ fn construct_polyforest(
 
 // The main vacuum logic
 async fn vacuum(
+    docker: &Docker,
     state: &mut State,
     first_run: bool,
     threshold: Byte,
@@ -480,11 +481,10 @@ async fn vacuum(
     min_age: Option<Duration>,
 ) -> io::Result<()> {
     // Find all images.
-    let docker = Docker::connect_with_local_defaults().map_err(io::Error::other)?;
-    let image_records = list_image_records(&docker).await?;
+    let image_records = list_image_records(docker).await?;
 
     // Find all images in use by containers.
-    let image_ids_in_use = image_ids_in_use(&docker).await?;
+    let image_ids_in_use = image_ids_in_use(docker).await?;
 
     // Construct a polyforest of image nodes that reflects their parent-child relationships.
     let polyforest = construct_polyforest(state, first_run, &image_records, &image_ids_in_use)?;
@@ -545,7 +545,7 @@ async fn vacuum(
 
     // Check if we're over the threshold.
     let mut deleted_image_ids = HashSet::new();
-    let space = space_usage(&docker).await?;
+    let space = space_usage(docker).await?;
     if space > threshold {
         info!(
             "Docker images are currently using {}, but the limit is {}.",
@@ -557,7 +557,7 @@ async fn vacuum(
         for image_ids in sorted_image_nodes.chunks_mut(deletion_chunk_size) {
             for (image_id, _) in image_ids {
                 // Delete the image.
-                if let Err(error) = delete_image(&docker, image_id).await {
+                if let Err(error) = delete_image(docker, image_id).await {
                     // The deletion failed. Just log the error and proceed.
                     error!("{}", error);
                 } else {
@@ -567,7 +567,7 @@ async fn vacuum(
             }
 
             // Break if we're within the threshold.
-            let new_space = space_usage(&docker).await?;
+            let new_space = space_usage(docker).await?;
             if new_space <= threshold {
                 info!(
                     "Docker images are now using {}, which is within the limit of {}.",
@@ -606,7 +606,24 @@ async fn vacuum(
 #[allow(clippy::type_complexity)]
 pub async fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::Result<()> {
     // Determine the threshold in bytes.
-    let Threshold::Absolute(threshold) = settings.threshold;
+    let threshold = match settings.threshold {
+        Threshold::Absolute(b) => b,
+
+        #[cfg(target_os = "linux")]
+        Threshold::Percentage(p) =>
+        {
+            #[allow(
+                clippy::cast_precision_loss,
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss
+            )]
+            Byte::from_bytes(
+                (p * docker_root_dir_filesystem_size().await?.get_bytes() as f64) as u128,
+            )
+        }
+    };
+
+    let docker = Docker::connect_with_local_defaults().map_err(io::Error::other)?;
 
     // NOTE: Don't change this log line, since the test in the Homebrew formula
     // (https://github.com/Homebrew/homebrew-core/blob/HEAD/Formula/d/docuum.rb) relies on it.
@@ -614,6 +631,7 @@ pub async fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -
 
     // Run the main vacuum logic.
     vacuum(
+        &docker,
         state,
         *first_run,
         threshold,
@@ -626,7 +644,6 @@ pub async fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -
     *first_run = false;
 
     // Stream Docker events via the API.
-    let docker = Docker::connect_with_local_defaults().map_err(io::Error::other)?;
     let mut events_stream = docker.events::<String>(None);
 
     // Handle each incoming event.
@@ -695,6 +712,7 @@ pub async fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -
         if touch_image(&docker, state, &image_id, true).await? {
             // Run the main vacuum logic only if a new image came in.
             vacuum(
+                &docker,
                 state,
                 *first_run,
                 threshold,
