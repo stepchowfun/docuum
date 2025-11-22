@@ -196,8 +196,7 @@ async fn image_ids_in_use(docker: &Docker) -> io::Result<HashSet<String>> {
 
 // Determine Docker's root directory.
 #[cfg(target_os = "linux")]
-async fn docker_root_dir() -> io::Result<PathBuf> {
-    let docker = Docker::connect_with_local_defaults().map_err(io::Error::other)?;
+async fn docker_root_dir(docker: &Docker) -> io::Result<PathBuf> {
     let info: SystemInfo = docker.info().await.map_err(io::Error::other)?;
     info.docker_root_dir
         .map(PathBuf::from)
@@ -206,7 +205,7 @@ async fn docker_root_dir() -> io::Result<PathBuf> {
 
 // Find the disk containing a path.
 #[cfg(target_os = "linux")]
-async fn get_disk_by_file<'a>(disks: &'a [Disk], path: &Path) -> io::Result<&'a Disk> {
+fn get_disk_by_file<'a>(disks: &'a [Disk], path: &Path) -> io::Result<&'a Disk> {
     disks
         .iter()
         .filter(|d| path.starts_with(d.mount_point()))
@@ -221,11 +220,11 @@ async fn get_disk_by_file<'a>(disks: &'a [Disk], path: &Path) -> io::Result<&'a 
 
 // Find size of filesystem on which docker root directory is stored.
 #[cfg(target_os = "linux")]
-async fn docker_root_dir_filesystem_size() -> io::Result<Byte> {
-    let root_dir = docker_root_dir().await?;
+async fn docker_root_dir_filesystem_size(docker: &Docker) -> io::Result<Byte> {
+    let root_dir = docker_root_dir(docker).await?;
     let system = System::new_with_specifics(RefreshKind::new().with_disks_list());
     let disks = system.disks();
-    let disk = get_disk_by_file(disks, &root_dir).await?;
+    let disk = get_disk_by_file(disks, &root_dir)?;
     Ok(Byte::from(disk.total_space()))
 }
 
@@ -605,25 +604,10 @@ async fn vacuum(
 // Stream Docker events and vacuum when necessary.
 #[allow(clippy::type_complexity)]
 pub async fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -> io::Result<()> {
-    // Determine the threshold in bytes.
-    let threshold = match settings.threshold {
-        Threshold::Absolute(b) => b,
-
-        #[cfg(target_os = "linux")]
-        Threshold::Percentage(p) =>
-        {
-            #[allow(
-                clippy::cast_precision_loss,
-                clippy::cast_possible_truncation,
-                clippy::cast_sign_loss
-            )]
-            Byte::from_bytes(
-                (p * docker_root_dir_filesystem_size().await?.get_bytes() as f64) as u128,
-            )
-        }
-    };
-
     let docker = Docker::connect_with_local_defaults().map_err(io::Error::other)?;
+
+    // Determine the threshold in bytes.
+    let threshold = threshold_unit(&settings.threshold, &docker).await?;
 
     // NOTE: Don't change this log line, since the test in the Homebrew formula
     // (https://github.com/Homebrew/homebrew-core/blob/HEAD/Formula/d/docuum.rb) relies on it.
@@ -735,6 +719,31 @@ pub async fn run(settings: &Settings, state: &mut State, first_run: &mut bool) -
         "{} terminated.",
         "Docker events stream".code_str(),
     )))
+}
+
+#[allow(clippy::unused_async)]
+#[cfg(not(target_os = "linux"))]
+async fn threshold_unit(threshold: &Threshold, _docker: &Docker) -> io::Result<Byte> {
+    let Threshold::Absolute(b) = threshold;
+    Ok(*b)
+}
+
+#[cfg(target_os = "linux")]
+async fn threshold_unit(threshold: &Threshold, docker: &Docker) -> io::Result<Byte> {
+    match threshold {
+        Threshold::Absolute(b) => Ok(*b),
+        Threshold::Percentage(p) =>
+        {
+            #[allow(
+                clippy::cast_precision_loss,
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss
+            )]
+            Ok(Byte::from_bytes(
+                (p * docker_root_dir_filesystem_size(docker).await?.get_bytes() as f64) as u128,
+            ))
+        }
+    }
 }
 
 #[cfg(test)]
