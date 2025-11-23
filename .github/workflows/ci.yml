@@ -68,6 +68,17 @@ jobs:
         name: aarch64-unknown-linux-musl
         path: artifacts/docuum
         if-no-files-found: error
+    - run: |
+        # Make Bash log commands and not silently ignore errors.
+        set -euxo pipefail
+
+        # The artifact name will contain the target triple, so the file name doesn't need to.
+        mv artifacts/docuum-armv7-unknown-linux-gnueabihf artifacts/docuum
+    - uses: actions/upload-artifact@v4
+      with:
+        name: armv7-unknown-linux-gnueabihf
+        path: artifacts/docuum
+        if-no-files-found: error
   ci-windows:
     name: Build for Windows
     runs-on: windows-latest
@@ -240,6 +251,9 @@ jobs:
           artifacts/aarch64-unknown-linux-musl/docuum \
           artifacts/docuum-aarch64-unknown-linux-musl
         mv \
+          artifacts/armv7-unknown-linux-gnueabihf/docuum \
+          artifacts/docuum-armv7-unknown-linux-gnueabihf
+        mv \
           artifacts/x86_64-apple-darwin/docuum \
           artifacts/docuum-x86_64-apple-darwin
         mv \
@@ -256,12 +270,13 @@ jobs:
         # https://github.com/actions/upload-artifact/issues/38.
         chmod a+x artifacts/docuum-x86_64-unknown-linux-musl
         chmod a+x artifacts/docuum-aarch64-unknown-linux-musl
+        chmod a+x artifacts/docuum-armv7-unknown-linux-gnueabihf
     - if: ${{ env.VERSION_TO_PUBLISH != null }}
       uses: docker/build-push-action@v5
       with:
         context: .
         push: true
-        platforms: linux/amd64,linux/arm64
+        platforms: linux/amd64,linux/arm64,linux/arm/v7
         tags: stephanmisc/docuum,stephanmisc/docuum:${{ env.VERSION_TO_PUBLISH }}
     - if: ${{ env.VERSION_TO_PUBLISH != null }}
       env:
@@ -288,6 +303,7 @@ jobs:
           'artifacts/docuum-x86_64-unknown-linux-musl' \
           'artifacts/docuum-aarch64-unknown-linux-gnu' \
           'artifacts/docuum-aarch64-unknown-linux-musl' \
+          'artifacts/docuum-armv7-unknown-linux-gnueabihf' \
           'artifacts/docuum-x86_64-apple-darwin' \
           'artifacts/docuum-aarch64-apple-darwin' \
           'artifacts/docuum-x86_64-pc-windows-msvc.exe' \

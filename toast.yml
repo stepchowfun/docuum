@@ -32,15 +32,16 @@ tasks:
     command: |
       # Install the following packages:
       #
-      # - build-essential       - Used to link some crates
-      # - ca-certificates       - Used for fetching Docker's GPG key
-      # - curl                  - Used for installing Docker, Tagref, and Rust
-      # - gcc-aarch64-linux-gnu - Used for linking the binary for AArch64
-      # - gcc-x86-64-linux-gnu  - Used for linking the binary for x86-64
-      # - gnupg                 - Used to install Docker's GPG key
-      # - lsb-release           - Used below to determine the Ubuntu release codename
-      # - ripgrep               - Used for various linting tasks
-      # - shellcheck            - Used for linting shell scripts
+      # - build-essential         - Used to link some crates
+      # - ca-certificates         - Used for fetching Docker's GPG key
+      # - curl                    - Used for installing Docker, Tagref, and Rust
+      # - gcc-aarch64-linux-gnu   - Used for linking the binary for AArch64
+      # - gcc-x86-64-linux-gnu    - Used for linking the binary for x86-64
+      # - gcc-arm-linux-gnueabihf - Used for linking the binary for ARMv7
+      # - gnupg                   - Used to install Docker's GPG key
+      # - lsb-release             - Used below to determine the Ubuntu release codename
+      # - ripgrep                 - Used for various linting tasks
+      # - shellcheck              - Used for linting shell scripts
       apt-get update
       apt-get install --yes \
         build-essential \
@@ -48,6 +49,7 @@ tasks:
         curl \
         gcc-aarch64-linux-gnu \
         gcc-x86-64-linux-gnu \
+        gcc-arm-linux-gnueabihf \
         gnupg \
         lsb-release \
         ripgrep \
@@ -240,18 +242,21 @@ tasks:
       rustup target add x86_64-unknown-linux-musl
       rustup target add aarch64-unknown-linux-gnu
       rustup target add aarch64-unknown-linux-musl
+      rustup target add armv7-unknown-linux-gnueabihf
 
       # Set the linkers.
       export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=x86_64-linux-gnu-gcc
       export CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-gnu-gcc
       export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
       export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc
+      export CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc
 
       # Build the project with Cargo for each Linux target.
       cargo-online build --release --target x86_64-unknown-linux-gnu
       cargo-online build --release --target x86_64-unknown-linux-musl
       cargo-online build --release --target aarch64-unknown-linux-gnu
       cargo-online build --release --target aarch64-unknown-linux-musl
+      cargo-online build --release --target armv7-unknown-linux-gnueabihf
 
       # Move the binaries to a more conveniennt location for exporting.
       mkdir artifacts
@@ -267,6 +272,9 @@ tasks:
       cp \
         target/aarch64-unknown-linux-musl/release/docuum \
         artifacts/docuum-aarch64-unknown-linux-musl
+      cp \
+        target/armv7-unknown-linux-gnueabihf/release/docuum \
+        artifacts/armv7-unknown-linux-gnueabihf
 
   validate_release:
     description: Validate the release.

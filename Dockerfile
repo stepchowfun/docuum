@@ -5,6 +5,7 @@ FROM --platform=$BUILDPLATFORM alpine:3.20 AS build
 ARG TARGETPLATFORM
 COPY artifacts/docuum-x86_64-unknown-linux-musl /tmp/linux/amd64
 COPY artifacts/docuum-aarch64-unknown-linux-musl /tmp/linux/arm64
+COPY artifacts/armv7-unknown-linux-gnueabihf /tmp/linux/arm/v7
 RUN cp "/tmp/$TARGETPLATFORM" /usr/local/bin/docuum
 
 # A minimal base image

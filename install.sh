@@ -30,6 +30,9 @@
   elif uname -a | grep -qi 'aarch64.*Linux'; then
     echo 'AArch64 non-GNU Linux detected.'
     FILENAME=docuum-aarch64-unknown-linux-musl
+  elif uname -a | grep -qi 'armv7l.*GNU/Linux'; then
+    echo 'ARMv7 GNU Linux detected.'
+    FILENAME=docuum-armv7-unknown-linux-gnueabihf
   elif uname -a | grep -qi 'Darwin.*x86_64'; then
     echo 'x86-64 macOS detected.'
     FILENAME=docuum-x86_64-apple-darwin
