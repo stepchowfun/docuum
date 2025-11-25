@@ -11,7 +11,7 @@ done
 
 # Start Docuum in the background.
 echo 'Starting Docuum…'
-LOG_LEVEL=debug /docuum-x86_64-unknown-linux-musl --threshold '14 MB' --keep 'alpine:keep' &
+LOG_LEVEL=debug /docuum-x86_64-unknown-linux-musl --threshold '20 MB' --keep 'alpine:keep' &
 DOCUUM_PID="$!"
 
 # This function waits for Docuum to start sleeping by checking the process state. The process could
@@ -45,7 +45,8 @@ docker run --rm alpine@sha256:4716d67546215299bf023fd80cc9d7e67f4bdc006a360727fd
 
 wait_for_docuum
 
-# This image also uses ~5.5 MB. Now we should be above the 14 MB threshold.
+# This image also uses ~5.5 MB. For some reason, this pushes us over the 20 MB
+# threshold, even though we've only downloaded ~5.5 MB * 3 = ~16.5 MB.
 echo 'Using another image…'
 docker run --rm alpine@sha256:fef20cf0221c5c0eaae2d8f59081b07cd351a94ac83cdc74109b17ec90ce0a82 true
 
