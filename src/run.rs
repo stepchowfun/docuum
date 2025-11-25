@@ -56,13 +56,14 @@ struct Event {
 
     #[serde(rename = "Actor")]
     actor: EventActor,
-
-    id: String,
 }
 
 // A Docker event actor
 #[derive(Deserialize, Serialize, Debug)]
 struct EventActor {
+    #[serde(rename = "ID")]
+    id: String,
+
     #[serde(rename = "Attributes")]
     attributes: EventActorAttributes,
 }
@@ -143,11 +144,25 @@ fn parent_id(state: &State, image_id: &str) -> io::Result<Option<String>> {
     // Query Docker for the parent image ID.
     let output = Command::new("docker")
         .args(["image", "inspect", "--format", "{{.Parent}}", image_id])
-        .stderr(Stdio::inherit())
         .output()?;
 
     // Ensure the command succeeded.
     if !output.status.success() {
+        // [tag:missing_parent_behavior] When the image doesn't have a
+        // `Parent`, Docker Engine API v1.52 (which ships with Docker Engine
+        // v29.0) and higher omit it. Previous versions return empty string.
+        if let Ok(output_err) = String::from_utf8(output.stderr) {
+            if output_err.contains("map has no entry for key \"Parent\"") {
+                return Ok(None);
+            }
+
+            return Err(io::Error::other(format!(
+                "{}Unable to determine ID of the parent of image {}.",
+                output_err,
+                image_id.code_str(),
+            )));
+        }
+
         return Err(io::Error::other(format!(
             "Unable to determine ID of the parent of image {}.",
             image_id.code_str(),
@@ -159,7 +174,7 @@ fn parent_id(state: &State, image_id: &str) -> io::Result<Option<String>> {
         .map(|output| {
             let trimmed_output = output.trim();
 
-            // Does the image even have a parent?
+            // [ref:missing_parent_behavior] Does the image even have a parent?
             if trimmed_output.is_empty() {
                 None
             } else {
@@ -833,24 +848,15 @@ pub fn run(
         };
 
         // Get the ID of the image.
-        let image_id = image_id(&if event.r#type == "container"
-            && (event.action == "create" || event.action == "destroy")
-        {
+        let image_id = image_id(&if event.r#type == "container" {
             if let Some(image_name) = event.actor.attributes.image {
                 image_name
             } else {
-                trace!("Invalid Docker event.");
+                trace!("Skipping due to irrelevance.");
                 continue;
             }
-        } else if event.r#type == "image"
-            && (event.action == "import"
-                || event.action == "load"
-                || event.action == "pull"
-                || event.action == "push"
-                || event.action == "save"
-                || event.action == "tag")
-        {
-            event.id
+        } else if event.r#type == "image" {
+            event.actor.id
         } else {
             trace!("Skipping due to irrelevance.");
             continue;
