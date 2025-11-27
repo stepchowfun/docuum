@@ -36,8 +36,8 @@ tasks:
       # - ca-certificates         - Used for fetching Docker's GPG key
       # - curl                    - Used for installing Docker, Tagref, and Rust
       # - gcc-aarch64-linux-gnu   - Used for linking the binary for AArch64
-      # - gcc-x86-64-linux-gnu    - Used for linking the binary for x86-64
       # - gcc-arm-linux-gnueabihf - Used for linking the binary for ARMv7
+      # - gcc-x86-64-linux-gnu    - Used for linking the binary for x86-64
       # - gnupg                   - Used to install Docker's GPG key
       # - lsb-release             - Used below to determine the Ubuntu release codename
       # - ripgrep                 - Used for various linting tasks
@@ -48,8 +48,8 @@ tasks:
         ca-certificates \
         curl \
         gcc-aarch64-linux-gnu \
-        gcc-x86-64-linux-gnu \
         gcc-arm-linux-gnueabihf \
+        gcc-x86-64-linux-gnu \
         gnupg \
         lsb-release \
         ripgrep \
