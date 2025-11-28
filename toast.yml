@@ -274,7 +274,7 @@ tasks:
         artifacts/docuum-aarch64-unknown-linux-musl
       cp \
         target/armv7-unknown-linux-gnueabihf/release/docuum \
-        artifacts/armv7-unknown-linux-gnueabihf
+        artifacts/docuum-armv7-unknown-linux-gnueabihf
 
   validate_release:
     description: Validate the release.
