@@ -638,6 +638,7 @@ fn construct_polyforest(
 }
 
 // The main vacuum logic
+#[allow(clippy::too_many_lines)]
 fn vacuum(
     state: &mut State,
     first_run: bool,
