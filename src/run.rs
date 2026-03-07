@@ -638,6 +638,7 @@ fn construct_polyforest(
 }
 
 // The main vacuum logic
+#[allow(clippy::too_many_lines)]
 fn vacuum(
     state: &mut State,
     first_run: bool,
@@ -662,6 +663,20 @@ fn vacuum(
         x.1.last_used_since_epoch
             .cmp(&y.1.last_used_since_epoch)
             .then(y.1.ancestors.cmp(&x.1.ancestors))
+    });
+
+    // Filter out images currently in use by containers. Attempting to delete these with `--force`
+    // would only untag them without freeing any space.
+    sorted_image_nodes.retain(|(image_id, _)| {
+        if image_ids_in_use.contains(*image_id) {
+            debug!(
+                "Skipping image {} because it is in use by a container.",
+                image_id.code_str(),
+            );
+            return false;
+        }
+
+        true
     });
 
     // If the user provided the `--keep` argument, we need to filter out images which match the
