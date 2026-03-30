@@ -4,17 +4,16 @@ mod state;
 
 use {
     crate::{format::CodeStr, run::run},
-    atty::Stream,
     byte_unit::Byte,
     chrono::Local,
-    clap::{App, AppSettings, Arg},
-    env_logger::{Builder, fmt::Color},
+    clap::{Arg, ArgAction, Command},
+    env_logger::{Builder, fmt::style::Effects},
     humantime::parse_duration,
-    log::{Level, LevelFilter},
+    log::LevelFilter,
     regex::RegexSet,
     std::{
         env,
-        io::{self, Write},
+        io::{self, IsTerminal, Write},
         process::exit,
         str::FromStr,
         sync::{Arc, Mutex},
@@ -83,7 +82,7 @@ impl Threshold {
                     ))
                 }
             }
-            None => Byte::from_str(threshold)
+            None => Byte::parse_str(threshold, true)
                 .map_err(|_| {
                     io::Error::new(
                         io::ErrorKind::InvalidInput,
@@ -96,7 +95,7 @@ impl Threshold {
 
     #[cfg(not(target_os = "linux"))]
     fn from_str(threshold: &str) -> io::Result<Threshold> {
-        Byte::from_str(threshold)
+        Byte::parse_str(threshold, true)
             .map_err(|_| {
                 io::Error::new(
                     io::ErrorKind::InvalidInput,
@@ -126,34 +125,15 @@ fn set_up_logging() {
             .unwrap_or(DEFAULT_LOG_LEVEL),
         )
         .format(|buf, record| {
-            let mut style = buf.style();
-            style.set_bold(true);
-            match record.level() {
-                Level::Error => {
-                    style.set_color(Color::Red);
-                }
-                Level::Warn => {
-                    style.set_color(Color::Yellow);
-                }
-                Level::Info => {
-                    style.set_color(Color::Green);
-                }
-                Level::Debug => {
-                    style.set_color(Color::Blue);
-                }
-                Level::Trace => {
-                    style.set_color(Color::Cyan);
-                }
-            }
+            let style = buf
+                .default_level_style(record.level())
+                .effects(Effects::BOLD);
 
             writeln!(
                 buf,
-                "{} {}",
-                style.value(format!(
-                    "[{} {}]",
-                    Local::now().format("%Y-%m-%d %H:%M:%S %:z"),
-                    record.level(),
-                )),
+                "{style}[{} {}]{style:#} {}",
+                Local::now().format("%Y-%m-%d %H:%M:%S %:z"),
+                record.level(),
                 record.args(),
             )
         })
@@ -163,54 +143,58 @@ fn set_up_logging() {
 // Parse the command-line arguments.
 fn settings() -> io::Result<Settings> {
     // Set up the command-line interface.
-    let matches = App::new("Docuum")
+    let matches = Command::new("Docuum")
         .version(VERSION)
-        .version_short("v")
         .author("Stephan Boyer <stephan@stephanboyer.com>")
         .about("Docuum performs LRU cache eviction for Docker images.")
-        .setting(AppSettings::ColoredHelp)
-        .setting(AppSettings::NextLineHelp)
-        .setting(AppSettings::UnifiedHelpMessage)
+        .disable_version_flag(true)
+        .next_line_help(true)
         .arg(
-            Arg::with_name(THRESHOLD_OPTION)
+            Arg::new("version")
+                .short('v')
+                .long("version")
+                .help("Print version information")
+                .action(ArgAction::Version),
+        )
+        .arg(
+            Arg::new(THRESHOLD_OPTION)
                 .value_name("THRESHOLD")
-                .short("t")
+                .short('t')
                 .long(THRESHOLD_OPTION)
-                .help(&format!(
+                .help(format!(
                     "Sets the maximum amount of space to be used for Docker images (default: {})",
                     DEFAULT_THRESHOLD.code_str(),
                 )),
         )
         .arg(
-            Arg::with_name(KEEP_OPTION)
+            Arg::new(KEEP_OPTION)
                 .value_name("REGEX")
-                .short("k")
+                .short('k')
                 .long(KEEP_OPTION)
-                .multiple(true)
-                .number_of_values(1)
+                .action(ArgAction::Append)
                 .help("Prevents deletion of images for which repository:tag matches <REGEX>"),
         )
         .arg(
-            Arg::with_name(DELETION_CHUNK_SIZE_OPTION)
+            Arg::new(DELETION_CHUNK_SIZE_OPTION)
                 .value_name("DELETION CHUNK SIZE")
-                .short("d")
+                .short('d')
                 .long(DELETION_CHUNK_SIZE_OPTION)
-                .help(&format!(
+                .help(format!(
                     "Removes specified quantity of images at a time \
                         (default: {DEFAULT_DELETION_CHUNK_SIZE})",
                 )),
         )
         .arg(
-            Arg::with_name(MIN_AGE_OPTION)
+            Arg::new(MIN_AGE_OPTION)
                 .value_name("MIN AGE")
-                .short("m")
+                .short('m')
                 .long(MIN_AGE_OPTION)
                 .help("Sets the minimum age of images to be considered for deletion"),
         )
         .get_matches();
 
     // Determine how many images to delete at once.
-    let deletion_chunk_size = match matches.value_of(DELETION_CHUNK_SIZE_OPTION) {
+    let deletion_chunk_size = match matches.get_one::<String>(DELETION_CHUNK_SIZE_OPTION) {
         Some(v) => match v.parse::<usize>() {
             Ok(chunk_size) => chunk_size,
             Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidInput, e)),
@@ -219,7 +203,7 @@ fn settings() -> io::Result<Settings> {
     };
 
     // Determine what images need to be preserved at all costs.
-    let keep = match matches.values_of(KEEP_OPTION) {
+    let keep = match matches.get_many::<String>(KEEP_OPTION) {
         Some(values) => match RegexSet::new(values) {
             Ok(set) => Some(set),
             Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidInput, e)),
@@ -228,7 +212,7 @@ fn settings() -> io::Result<Settings> {
     };
 
     // Determine the minimum age for images to be considered for deletion.
-    let min_age = match matches.value_of(MIN_AGE_OPTION) {
+    let min_age = match matches.get_one::<String>(MIN_AGE_OPTION) {
         Some(value) => match parse_duration(value) {
             Ok(duration) => {
                 debug!(
@@ -245,11 +229,11 @@ fn settings() -> io::Result<Settings> {
 
     // Read the threshold.
     let default_threshold = Threshold::Absolute(
-        Byte::from_str(DEFAULT_THRESHOLD).unwrap(), // Manually verified safe
+        Byte::parse_str(DEFAULT_THRESHOLD, true).unwrap(), // Manually verified safe
     );
     let threshold = matches
-        .value_of(THRESHOLD_OPTION)
-        .map_or_else(|| Ok(default_threshold), Threshold::from_str)?;
+        .get_one::<String>(THRESHOLD_OPTION)
+        .map_or_else(|| Ok(default_threshold), |value| Threshold::from_str(value))?;
 
     Ok(Settings {
         deletion_chunk_size,
@@ -284,11 +268,11 @@ fn main() {
         exit(1);
     }) {
         // Log the error and proceed anyway.
-        error!("{}", error);
+        error!("{error}");
     }
 
     // Determine whether to print colored output.
-    colored::control::set_override(atty::is(Stream::Stderr));
+    colored::control::set_override(io::stderr().is_terminal());
 
     // Set up the logger.
     set_up_logging();
@@ -297,7 +281,7 @@ fn main() {
     let settings = match settings() {
         Ok(settings) => settings,
         Err(error) => {
-            error!("{}", error);
+            error!("{error}");
             exit(1);
         }
     };
@@ -321,7 +305,7 @@ fn main() {
     loop {
         // This will run until an error occurs (it never returns `Ok`).
         if let Err(error) = run(&settings, &mut state, &mut first_run, &destructors) {
-            error!("{}", error);
+            error!("{error}");
         }
 
         // Clean up any resources left over from that run.
