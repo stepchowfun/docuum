@@ -41,15 +41,15 @@ Usage: docuum [OPTIONS]
 
 Options:
   -v, --version
-          Print version information
+          Print version
   -t, --threshold <THRESHOLD>
-          Sets the maximum amount of space to be used for Docker images (default: `10 GB`)
+          Set the maximum amount of space to use for Docker images [default: "10 GB"]
   -k, --keep <REGEX>
-          Prevents deletion of images for which repository:tag matches <REGEX>
+          Prevent deletion of images for which repository:tag matches <REGEX>
   -d, --deletion-chunk-size <DELETION CHUNK SIZE>
-          Removes specified quantity of images at a time (default: 1)
+          Remove the specified quantity of images at a time [default: 1]
   -m, --min-age <MIN AGE>
-          Sets the minimum age of images to be considered for deletion
+          Set the minimum age of images to consider for deletion
   -h, --help
           Print help
 ```

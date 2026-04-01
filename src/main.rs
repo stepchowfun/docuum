@@ -6,7 +6,7 @@ use {
     crate::{format::CodeStr, run::run},
     byte_unit::Byte,
     chrono::Local,
-    clap::{Arg, ArgAction, Command},
+    clap::{ArgAction, Parser},
     env_logger::{Builder, fmt::style::Effects},
     humantime::parse_duration,
     log::LevelFilter,
@@ -25,19 +25,10 @@ use {
 #[macro_use]
 extern crate log;
 
-// The program version
-const VERSION: &str = env!("CARGO_PKG_VERSION");
-
 // Defaults
 const DEFAULT_DELETION_CHUNK_SIZE: usize = 1;
 const DEFAULT_LOG_LEVEL: LevelFilter = LevelFilter::Debug;
 const DEFAULT_THRESHOLD: &str = "10 GB";
-
-// Command-line argument and option names
-const DELETION_CHUNK_SIZE_OPTION: &str = "deletion-chunk-size";
-const KEEP_OPTION: &str = "keep";
-const MIN_AGE_OPTION: &str = "min-age";
-const THRESHOLD_OPTION: &str = "threshold";
 
 // Size threshold argument, absolute or relative to filesystem size
 #[derive(Copy, Clone)]
@@ -106,7 +97,58 @@ impl Threshold {
     }
 }
 
-// This struct represents the command-line arguments.
+// This struct represents the raw command-line arguments.
+#[derive(Parser)]
+#[command(
+    about = concat!(
+        env!("CARGO_PKG_DESCRIPTION"),
+        "\n\n",
+        "More information can be found at: ",
+        env!("CARGO_PKG_HOMEPAGE")
+    ),
+    version,
+    disable_version_flag = true
+)]
+struct Cli {
+    #[arg(short, long, help = "Print version", action = ArgAction::Version)]
+    _version: Option<bool>,
+
+    #[arg(
+        short,
+        long,
+        help = "Set the maximum amount of space to use for Docker images",
+        default_value = DEFAULT_THRESHOLD
+    )]
+    threshold: String,
+
+    #[arg(
+        short,
+        long,
+        value_name = "REGEX",
+        help = "Prevent deletion of images for which repository:tag matches <REGEX>",
+        action = ArgAction::Append
+    )]
+    keep: Vec<String>,
+
+    #[arg(
+        short,
+        long,
+        value_name = "DELETION CHUNK SIZE",
+        help = "Remove the specified quantity of images at a time",
+        default_value_t = DEFAULT_DELETION_CHUNK_SIZE
+    )]
+    deletion_chunk_size: usize,
+
+    #[arg(
+        short,
+        long,
+        value_name = "MIN AGE",
+        help = "Set the minimum age of images to consider for deletion"
+    )]
+    min_age: Option<String>,
+}
+
+// This struct represents the parsed command-line arguments.
 pub struct Settings {
     deletion_chunk_size: usize,
     keep: Option<RegexSet>,
@@ -142,84 +184,26 @@ fn set_up_logging() {
 
 // Parse the command-line arguments.
 fn settings() -> io::Result<Settings> {
-    // Set up the command-line interface.
-    let matches = Command::new("Docuum")
-        .version(VERSION)
-        .author("Stephan Boyer <stephan@stephanboyer.com>")
-        .about("Docuum performs LRU cache eviction for Docker images.")
-        .disable_version_flag(true)
-        .next_line_help(true)
-        .arg(
-            Arg::new("version")
-                .short('v')
-                .long("version")
-                .help("Print version information")
-                .action(ArgAction::Version),
-        )
-        .arg(
-            Arg::new(THRESHOLD_OPTION)
-                .value_name("THRESHOLD")
-                .short('t')
-                .long(THRESHOLD_OPTION)
-                .help(format!(
-                    "Sets the maximum amount of space to be used for Docker images (default: {})",
-                    DEFAULT_THRESHOLD.code_str(),
-                )),
-        )
-        .arg(
-            Arg::new(KEEP_OPTION)
-                .value_name("REGEX")
-                .short('k')
-                .long(KEEP_OPTION)
-                .action(ArgAction::Append)
-                .help("Prevents deletion of images for which repository:tag matches <REGEX>"),
-        )
-        .arg(
-            Arg::new(DELETION_CHUNK_SIZE_OPTION)
-                .value_name("DELETION CHUNK SIZE")
-                .short('d')
-                .long(DELETION_CHUNK_SIZE_OPTION)
-                .help(format!(
-                    "Removes specified quantity of images at a time \
-                        (default: {DEFAULT_DELETION_CHUNK_SIZE})",
-                )),
-        )
-        .arg(
-            Arg::new(MIN_AGE_OPTION)
-                .value_name("MIN AGE")
-                .short('m')
-                .long(MIN_AGE_OPTION)
-                .help("Sets the minimum age of images to be considered for deletion"),
-        )
-        .get_matches();
+    let cli = Cli::parse();
 
     // Determine how many images to delete at once.
-    let deletion_chunk_size = match matches.get_one::<String>(DELETION_CHUNK_SIZE_OPTION) {
-        Some(v) => match v.parse::<usize>() {
-            Ok(chunk_size) => chunk_size,
-            Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidInput, e)),
-        },
-        None => DEFAULT_DELETION_CHUNK_SIZE,
-    };
+    let deletion_chunk_size = cli.deletion_chunk_size;
 
     // Determine what images need to be preserved at all costs.
-    let keep = match matches.get_many::<String>(KEEP_OPTION) {
-        Some(values) => match RegexSet::new(values) {
+    let keep = if cli.keep.is_empty() {
+        None
+    } else {
+        match RegexSet::new(cli.keep) {
             Ok(set) => Some(set),
             Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidInput, e)),
-        },
-        None => None,
+        }
     };
 
     // Determine the minimum age for images to be considered for deletion.
-    let min_age = match matches.get_one::<String>(MIN_AGE_OPTION) {
+    let min_age = match cli.min_age.as_deref() {
         Some(value) => match parse_duration(value) {
             Ok(duration) => {
-                debug!(
-                    "{} parsed as {:?}.",
-                    format!("--{MIN_AGE_OPTION}").code_str(),
-                    duration,
-                );
+                debug!("{} parsed as {:?}.", "--min-age".code_str(), duration);
                 Some(duration)
             }
             Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidInput, e)),
@@ -228,12 +212,7 @@ fn settings() -> io::Result<Settings> {
     };
 
     // Read the threshold.
-    let default_threshold = Threshold::Absolute(
-        Byte::parse_str(DEFAULT_THRESHOLD, true).unwrap(), // Manually verified safe
-    );
-    let threshold = matches
-        .get_one::<String>(THRESHOLD_OPTION)
-        .map_or_else(|| Ok(default_threshold), |value| Threshold::from_str(value))?;
+    let threshold = Threshold::from_str(&cli.threshold)?;
 
     Ok(Settings {
         deletion_chunk_size,
@@ -314,5 +293,16 @@ fn main() {
         // Wait a moment and then retry.
         info!("Retrying in 5 seconds\u{2026}");
         sleep(Duration::from_secs(5));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Cli;
+    use clap::CommandFactory;
+
+    #[test]
+    fn verify_cli() {
+        Cli::command().debug_assert();
     }
 }

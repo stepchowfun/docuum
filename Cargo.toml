@@ -19,7 +19,7 @@ rust.warnings = "deny"
 [dependencies]
 byte-unit = "5"
 chrono = "0.4"
-clap = { version = "4", features = ["wrap_help"] }
+clap = { version = "4", features = ["derive", "wrap_help"] }
 colored = "3"
 dirs = "6"
 env_logger = "0.11"

@@ -810,6 +810,10 @@ pub fn run(
     destructors: &Arc<Mutex<Vec<Box<dyn FnOnce() + Send>>>>,
 ) -> io::Result<()> {
     // Determine the threshold in bytes.
+    #[cfg(not(target_os = "linux"))]
+    let Threshold::Absolute(threshold) = settings.threshold;
+
+    #[cfg(target_os = "linux")]
     let threshold = match settings.threshold {
         Threshold::Absolute(b) => b,
 
