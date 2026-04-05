@@ -125,8 +125,7 @@ struct Cli {
         short,
         long,
         value_name = "REGEX",
-        help = "Prevent deletion of images for which repository:tag matches <REGEX>",
-        action = ArgAction::Append
+        help = "Prevent deletion of images for which repository:tag matches <REGEX>"
     )]
     keep: Vec<String>,
 
