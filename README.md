@@ -37,27 +37,21 @@ You probably want to run Docuum as a [daemon](https://en.wikipedia.org/wiki/Daem
 Here are the supported command-line options:
 
 ```
-USAGE:
-    docuum
+Usage: docuum [OPTIONS]
 
-OPTIONS:
-    -d, --deletion-chunk-size <DELETION CHUNK SIZE>
-            Removes specified quantity of images at a time (default: 1)
-
-    -h, --help
-            Prints help information
-
-    -k, --keep <REGEX>...
-            Prevents deletion of images for which repository:tag matches <REGEX>
-
-    -m, --min-age <MIN AGE>
-            Sets the minimum age of images to be considered for deletion
-
-    -t, --threshold <THRESHOLD>
-            Sets the maximum amount of space to be used for Docker images (default: 10 GB)
-
-    -v, --version
-            Prints version information
+Options:
+  -v, --version
+          Print version
+  -t, --threshold <THRESHOLD>
+          Set the maximum amount of space to use for Docker images [default: "10 GB"]
+  -k, --keep <REGEX>
+          Prevent deletion of images for which repository:tag matches <REGEX>
+  -d, --deletion-chunk-size <DELETION CHUNK SIZE>
+          Remove the specified quantity of images at a time [default: 1]
+  -m, --min-age <MIN AGE>
+          Set the minimum age of images to consider for deletion
+  -h, --help
+          Print help
 ```
 
 The `--threshold` flag accepts [multiple representations](https://docs.rs/byte-unit/4.0.12/byte_unit/struct.Byte.html#examples-2), like `10 GB`, `10 GiB`, or `10GB`. On Linux, percentage-based thresholds like `50%` are also supported.

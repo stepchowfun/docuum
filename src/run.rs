@@ -4,7 +4,7 @@ use {
         format::CodeStr,
         state::{self, State},
     },
-    byte_unit::Byte,
+    byte_unit::{Byte, UnitType},
     chrono::DateTime,
     regex::RegexSet,
     serde::{Deserialize, Serialize},
@@ -22,7 +22,7 @@ use {
 #[cfg(target_os = "linux")]
 use {
     std::path::{Path, PathBuf},
-    sysinfo::{Disk, DiskExt, RefreshKind, System, SystemExt},
+    sysinfo::{Disk, Disks},
 };
 
 // When querying Docker for the image IDs corresponding to a list of container IDs, this is the
@@ -378,9 +378,8 @@ fn get_disk_by_file<'a>(disks: &'a [Disk], path: &Path) -> io::Result<&'a Disk> 
 #[cfg(target_os = "linux")]
 fn docker_root_dir_filesystem_size() -> io::Result<Byte> {
     let root_dir = docker_root_dir()?;
-    let system = System::new_with_specifics(RefreshKind::new().with_disks_list());
-    let disks = system.disks();
-    let disk = get_disk_by_file(disks, &root_dir)?;
+    let disks = Disks::new_with_refreshed_list();
+    let disk = get_disk_by_file(&disks, &root_dir)?;
     Ok(Byte::from(disk.total_space()))
 }
 
@@ -409,7 +408,7 @@ fn space_usage() -> io::Result<Byte> {
                 if let Ok(space_record) = serde_json::from_str::<SpaceRecord>(line) {
                     // Return early if we found the record we're looking for.
                     if space_record.r#type == "Images" {
-                        return Byte::from_str(&space_record.size).map_err(|_| {
+                        return Byte::parse_str(&space_record.size, true).map_err(|_| {
                             io::Error::other(format!(
                                 "Unable to parse {} from {}.",
                                 space_record.size.code_str(),
@@ -731,8 +730,14 @@ fn vacuum(
     if space > threshold {
         info!(
             "Docker images are currently using {}, but the limit is {}.",
-            space.get_appropriate_unit(false).to_string().code_str(),
-            threshold.get_appropriate_unit(false).to_string().code_str(),
+            space
+                .get_appropriate_unit(UnitType::Decimal)
+                .to_string()
+                .code_str(),
+            threshold
+                .get_appropriate_unit(UnitType::Decimal)
+                .to_string()
+                .code_str(),
         );
 
         // Start deleting images, beginning with the least recently used.
@@ -741,7 +746,7 @@ fn vacuum(
                 // Delete the image.
                 if let Err(error) = delete_image(image_id) {
                     // The deletion failed. Just log the error and proceed.
-                    error!("{}", error);
+                    error!("{error}");
                 } else {
                     // Forget about the deleted image.
                     deleted_image_ids.insert(image_id.clone());
@@ -753,8 +758,14 @@ fn vacuum(
             if new_space <= threshold {
                 info!(
                     "Docker images are now using {}, which is within the limit of {}.",
-                    new_space.get_appropriate_unit(false).to_string().code_str(),
-                    threshold.get_appropriate_unit(false).to_string().code_str(),
+                    new_space
+                        .get_appropriate_unit(UnitType::Decimal)
+                        .to_string()
+                        .code_str(),
+                    threshold
+                        .get_appropriate_unit(UnitType::Decimal)
+                        .to_string()
+                        .code_str(),
                 );
                 break;
             }
@@ -762,8 +773,14 @@ fn vacuum(
     } else {
         debug!(
             "Docker images are using {}, which is within the limit of {}.",
-            space.get_appropriate_unit(false).to_string().code_str(),
-            threshold.get_appropriate_unit(false).to_string().code_str(),
+            space
+                .get_appropriate_unit(UnitType::Decimal)
+                .to_string()
+                .code_str(),
+            threshold
+                .get_appropriate_unit(UnitType::Decimal)
+                .to_string()
+                .code_str(),
         );
     }
 
@@ -793,6 +810,10 @@ pub fn run(
     destructors: &Arc<Mutex<Vec<Box<dyn FnOnce() + Send>>>>,
 ) -> io::Result<()> {
     // Determine the threshold in bytes.
+    #[cfg(not(target_os = "linux"))]
+    let Threshold::Absolute(threshold) = settings.threshold;
+
+    #[cfg(target_os = "linux")]
     let threshold = match settings.threshold {
         Threshold::Absolute(b) => b,
 
@@ -804,7 +825,8 @@ pub fn run(
                 clippy::cast_possible_truncation,
                 clippy::cast_sign_loss
             )]
-            Byte::from_bytes((p * docker_root_dir_filesystem_size()?.get_bytes() as f64) as u128)
+            Byte::from_u128((p * docker_root_dir_filesystem_size()?.as_u128() as f64) as u128)
+                .unwrap()
         }
     };
 
@@ -837,9 +859,9 @@ pub fn run(
     // the child process.
     destructors.lock().unwrap().push(Box::new(move || {
         if let Err(error) = child.kill() {
-            error!("{}", error);
+            error!("{error}");
         } else if let Err(error) = child.wait() {
-            error!("{}", error);
+            error!("{error}");
         }
     }));
 
@@ -857,7 +879,7 @@ pub fn run(
                 event
             }
             Err(error) => {
-                trace!("Skipping due to: {}", error);
+                trace!("Skipping due to: {error}");
                 continue;
             }
         };
