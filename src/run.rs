@@ -29,8 +29,8 @@ use {
 // maximum number of container IDs to query at once.
 const CONTAINER_IDS_CHUNK_SIZE: usize = 100;
 
-// [tag:container_status_removing] The `docker container inspect` command seems to fail on
-// containers with this status. Source: https://github.com/stepchowfun/docuum/issues/237
+// The `docker container inspect` command seems to fail on containers with this status. Source:
+// https://github.com/stepchowfun/docuum/issues/237
 const CONTAINER_STATUS_REMOVING: &str = "removing";
 
 // These are all the possible statuses returned from `docker container ls`. Source:
