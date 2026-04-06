@@ -1,16 +1,14 @@
-use {
-    crate::format::CodeStr,
-    serde::{Deserialize, Serialize},
-    std::{
-        collections::HashMap,
-        env,
-        fs::{create_dir_all, read_to_string},
-        io::{self, Write},
-        path::PathBuf,
-        time::Duration,
-    },
-    tempfile::NamedTempFile,
+use crate::format::CodeStr;
+use serde::{Deserialize, Serialize};
+use std::{
+    collections::HashMap,
+    env,
+    fs::{create_dir_all, read_to_string},
+    io::{self, Write},
+    path::PathBuf,
+    time::Duration,
 };
+use tempfile::NamedTempFile;
 
 // What we want to remember about an individual image
 #[derive(Deserialize, Serialize)]

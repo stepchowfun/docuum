@@ -2,24 +2,22 @@ mod format;
 mod run;
 mod state;
 
-use {
-    crate::{format::CodeStr, run::run},
-    byte_unit::Byte,
-    chrono::Local,
-    clap::{ArgAction, Parser},
-    env_logger::{Builder, fmt::style::Effects},
-    humantime::parse_duration,
-    log::LevelFilter,
-    regex::RegexSet,
-    std::{
-        env,
-        io::{self, IsTerminal, Write},
-        process::exit,
-        str::FromStr,
-        sync::{Arc, Mutex},
-        thread::sleep,
-        time::Duration,
-    },
+use crate::{format::CodeStr, run::run};
+use byte_unit::Byte;
+use chrono::Local;
+use clap::{ArgAction, Parser};
+use env_logger::{Builder, fmt::style::Effects};
+use humantime::parse_duration;
+use log::LevelFilter;
+use regex::RegexSet;
+use std::{
+    env,
+    io::{self, IsTerminal, Write},
+    process::exit,
+    str::FromStr,
+    sync::{Arc, Mutex},
+    thread::sleep,
+    time::Duration,
 };
 
 #[macro_use]

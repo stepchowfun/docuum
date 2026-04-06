@@ -1,29 +1,26 @@
-use {
-    crate::{
-        Settings, Threshold,
-        format::CodeStr,
-        state::{self, State},
-    },
-    byte_unit::{Byte, UnitType},
-    chrono::DateTime,
-    regex::RegexSet,
-    serde::{Deserialize, Serialize},
-    std::{
-        cmp::max,
-        collections::{HashMap, HashSet, hash_map::Entry},
-        io::{self, BufRead, BufReader},
-        ops::Deref,
-        process::{Command, Stdio},
-        sync::{Arc, Mutex},
-        time::{Duration, SystemTime, UNIX_EPOCH},
-    },
+use crate::{
+    Settings, Threshold,
+    format::CodeStr,
+    state::{self, State},
+};
+use byte_unit::{Byte, UnitType};
+use chrono::DateTime;
+use regex::RegexSet;
+use serde::{Deserialize, Serialize};
+use std::{
+    cmp::max,
+    collections::{HashMap, HashSet, hash_map::Entry},
+    io::{self, BufRead, BufReader},
+    ops::Deref,
+    process::{Command, Stdio},
+    sync::{Arc, Mutex},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 #[cfg(target_os = "linux")]
-use {
-    std::path::{Path, PathBuf},
-    sysinfo::{Disk, Disks},
-};
+use std::path::{Path, PathBuf};
+#[cfg(target_os = "linux")]
+use sysinfo::{Disk, Disks};
 
 // When querying Docker for the image IDs corresponding to a list of container IDs, this is the
 // maximum number of container IDs to query at once.
@@ -931,14 +928,12 @@ pub fn run(
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::{ImageNode, ImageRecord, RepositoryTag, construct_polyforest, parse_docker_date},
-        crate::state::{self, State},
-        std::{
-            collections::{HashMap, HashSet},
-            io,
-            time::Duration,
-        },
+    use super::{ImageNode, ImageRecord, RepositoryTag, construct_polyforest, parse_docker_date};
+    use crate::state::{self, State};
+    use std::{
+        collections::{HashMap, HashSet},
+        io,
+        time::Duration,
     };
 
     #[test]
