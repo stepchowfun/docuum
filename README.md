@@ -220,7 +220,7 @@ Run `sudo systemctl enable docuum --now` to enable and start the service. You ca
 
 #### Creating an NSSM service on Windows
 
-On Windows, [NSSM](https://nssm.cc/), the "Non-Sucking Service Manager", can be used to run Docuum as a daemon. [Install NSSM](https://nssm.cc/download) by downloading the binary and adding it to your `PATH` (see the [Installation on Windows (x86-64)](#installation-on-windows-x86-64) section for instructions on how to configure this environment variable), then run Windows Terminal _as Administrator_ and enter the following command:
+On Windows, [NSSM](https://nssm.cc/), the "Non-Sucking Service Manager", can be used to run Docuum as a daemon. [Install NSSM](https://nssm.cc/download) by downloading the binary and adding it to your `PATH` (see the [Installation on Windows (AArch64 or x86-64)](#installation-on-windows-aarch64-or-x86-64) section for instructions on how to configure this environment variable), then run Windows Terminal _as Administrator_ and enter the following command:
 
 ```powershell
 nssm install Docuum
