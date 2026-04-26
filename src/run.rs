@@ -42,7 +42,7 @@ const CONTAINER_STATUSES: [&str; 7] = [
     CONTAINER_STATUS_REMOVING,
 ];
 
-// A Docker event (a line of output from `docker events --format '{{json .}}'`)
+// A Docker event (a line of output from `docker system events --format '{{json .}}'`)
 #[derive(Deserialize, Serialize, Debug)]
 struct Event {
     #[serde(rename = "Type")]
@@ -339,7 +339,7 @@ fn image_ids_in_use() -> io::Result<HashSet<String>> {
 fn docker_root_dir() -> io::Result<PathBuf> {
     // Query Docker for it.
     let output = Command::new("docker")
-        .args(["info", "--format", "{{.DockerRootDir}}"])
+        .args(["system", "info", "--format", "{{.DockerRootDir}}"])
         .stderr(Stdio::inherit())
         .output()?;
 
@@ -843,9 +843,9 @@ pub fn run(
     state::save(state)?;
     *first_run = false;
 
-    // Spawn `docker events --format '{{json .}}'`.
+    // Spawn `docker system events --format '{{json .}}'`.
     let mut child = Command::new("docker")
-        .args(["events", "--format", "{{json .}}"])
+        .args(["system", "events", "--format", "{{json .}}"])
         .stdout(Stdio::piped()) // [tag:stdout]
         .spawn()?;
 
@@ -935,10 +935,10 @@ pub fn run(
         debug!("Going back to sleep\u{2026}");
     }
 
-    // The `for` loop above will only terminate if something happened to `docker events`.
+    // The `for` loop above will only terminate if something happened to `docker system events`.
     Err(io::Error::other(format!(
         "{} terminated.",
-        "docker events".code_str(),
+        "docker system events".code_str(),
     )))
 }
 

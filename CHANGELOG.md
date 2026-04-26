@@ -199,7 +199,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.5] - 2020-07-14
 
 ### Fixed
-- Fixed a bug which caused zombie `docker events ...` processes to accumulate over time.
+- Fixed a bug which caused zombie `docker system events ...` processes to accumulate over time.
 
 ## [0.9.4] - 2020-02-12
 
@@ -257,7 +257,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docuum now automatically restarts itself when an error occurs.
 
 ### Fixed
-- Docuum now cleans up the `docker events` child process when an error occurs.
+- Docuum now cleans up the `docker system events` child process when an error occurs.
 
 ## [0.3.0] - 2020-01-06
 

@@ -5,7 +5,7 @@ set -euxo pipefail
 
 # Wait for the Docker daemon to start up.
 echo 'Waiting for Docker to start…'
-while ! docker ps > /dev/null 2>&1; do
+while ! docker container ls > /dev/null 2>&1; do
   sleep 1
 done
 
@@ -32,39 +32,39 @@ wait_for_docuum
 
 # This image uses ~5.5 MB.
 echo "Using an image we don't want to delete…"
-docker run --rm alpine@sha256:f27cad9117495d32d067133afff942cb2dc745dfe9163e949f6bfe8a6a245339 \
+docker container run --rm alpine@sha256:f27cad9117495d32d067133afff942cb2dc745dfe9163e949f6bfe8a6a245339 \
   true
-docker tag alpine@sha256:f27cad9117495d32d067133afff942cb2dc745dfe9163e949f6bfe8a6a245339 \
+docker image tag alpine@sha256:f27cad9117495d32d067133afff942cb2dc745dfe9163e949f6bfe8a6a245339 \
   alpine:keep
 
 wait_for_docuum
 
 # This image also uses ~5.5 MB.
 echo 'Using another image…'
-docker run --rm alpine@sha256:2039be0c5ec6ce8566809626a252c930216a92109c043f282504accb5ee3c0c6 true
+docker container run --rm alpine@sha256:2039be0c5ec6ce8566809626a252c930216a92109c043f282504accb5ee3c0c6 true
 
 wait_for_docuum
 
 # This image also uses ~5.5 MB. For some reason, this pushes us over the 20 MB
 # threshold, even though we've only downloaded ~5.5 MB * 3 = ~16.5 MB.
 echo 'Using another image…'
-docker run --rm alpine@sha256:4d889c14e7d5a73929ab00be2ef8ff22437e7cbc545931e52554a7b00e123d8b true
+docker container run --rm alpine@sha256:4d889c14e7d5a73929ab00be2ef8ff22437e7cbc545931e52554a7b00e123d8b true
 
 wait_for_docuum
 
 # Assert that the image protected by the `--keep` flag is still present.
 echo 'Checking that the protected image is still present…'
-docker inspect alpine@sha256:f27cad9117495d32d067133afff942cb2dc745dfe9163e949f6bfe8a6a245339 > \
+docker image inspect alpine@sha256:f27cad9117495d32d067133afff942cb2dc745dfe9163e949f6bfe8a6a245339 > \
   /dev/null 2>&1
 
 # Assert that the last image is still present.
 echo 'Checking that the last image is still present…'
-docker inspect alpine@sha256:4d889c14e7d5a73929ab00be2ef8ff22437e7cbc545931e52554a7b00e123d8b > \
+docker image inspect alpine@sha256:4d889c14e7d5a73929ab00be2ef8ff22437e7cbc545931e52554a7b00e123d8b > \
   /dev/null 2>&1
 
 # Assert that the first non-protected image was deleted.
 echo 'Checking that the first non-protected image was deleted…'
-if docker inspect alpine@sha256:2039be0c5ec6ce8566809626a252c930216a92109c043f282504accb5ee3c0c6 \
+if docker image inspect alpine@sha256:2039be0c5ec6ce8566809626a252c930216a92109c043f282504accb5ee3c0c6 \
   > /dev/null 2>&1
 then
   echo "The image wasn't deleted."
