@@ -898,7 +898,7 @@ pub fn run(
         let image_id = match image_id(&image_reference) {
             Ok(image_id) => image_id,
             Err(error) => {
-                if event.r#type == "image" && event.action == "delete" {
+                if event.r#type == "image" && matches!(event.action.as_str(), "delete" | "untag") {
                     trace!(
                         "Skipping {} event for {} because the image is already gone: {}",
                         event.action.code_str(),
