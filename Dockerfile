@@ -17,5 +17,5 @@ RUN apk add --no-cache docker-cli
 COPY --from=build /usr/local/bin/docuum /usr/local/bin/docuum
 
 # Set the entrypoint to Docuum. Note that Docuum is not intended to be run as
-# an init process, so be sure to pass `--init` to `docker run`.
+# an init process, so be sure to pass `--init` to `docker container run`.
 ENTRYPOINT ["/usr/local/bin/docuum"]
