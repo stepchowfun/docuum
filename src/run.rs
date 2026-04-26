@@ -882,7 +882,7 @@ pub fn run(
         };
 
         // Get the ID of the image.
-        let image_id = image_id(&if event.r#type == "container" {
+        let image_reference = if event.r#type == "container" {
             if let Some(image_name) = event.actor.attributes.image {
                 image_name
             } else {
@@ -894,7 +894,23 @@ pub fn run(
         } else {
             trace!("Skipping due to irrelevance.");
             continue;
-        })?;
+        };
+        let image_id = match image_id(&image_reference) {
+            Ok(image_id) => image_id,
+            Err(error) => {
+                if event.r#type == "image" && matches!(event.action.as_str(), "delete" | "untag") {
+                    trace!(
+                        "Skipping {} event for {} because the image is already gone: {}",
+                        event.action.code_str(),
+                        image_reference.code_str(),
+                        error.to_string().code_str(),
+                    );
+                    continue;
+                }
+
+                return Err(error);
+            }
+        };
 
         // Inform the user that we're about to vacuum.
         debug!("Waking up\u{2026}");
