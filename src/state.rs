@@ -64,7 +64,7 @@ pub fn load() -> io::Result<State> {
         let yaml = read_to_string(path)?;
 
         // Deserialize the YAML.
-        serde_yaml::from_str(&yaml).map_err(io::Error::other)
+        yaml_serde::from_str(&yaml).map_err(io::Error::other)
     } else {
         // Fail if we don't have a path.
         Err(io::Error::other("Unable to locate data directory."))
@@ -85,7 +85,7 @@ pub fn save(state: &State) -> io::Result<()> {
         let parent = path.parent().unwrap().to_owned();
 
         // The `unwrap` is safe because serialization should never fail.
-        let payload = serde_yaml::to_string(state).unwrap();
+        let payload = yaml_serde::to_string(state).unwrap();
 
         // Create the ancestor directories, if needed.
         create_dir_all(parent.clone())?;
