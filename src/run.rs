@@ -4,7 +4,7 @@ use crate::{
     state::{self, State},
 };
 use byte_unit::{Byte, UnitType};
-use chrono::DateTime;
+use chrono::{DateTime, Utc};
 use regex::RegexSet;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -493,9 +493,7 @@ fn parse_docker_date(timestamp: &str) -> io::Result<Duration> {
     // Parse the date and convert it into a duration since the UNIX epoch.
     let duration =
         match DateTime::parse_from_str(timestamp_without_timezone_triad, "%Y-%m-%d %H:%M:%S %z") {
-            Ok(datetime) => {
-                datetime.signed_duration_since::<chrono::offset::Utc>(DateTime::from(UNIX_EPOCH))
-            }
+            Ok(datetime) => datetime.signed_duration_since(DateTime::<Utc>::UNIX_EPOCH),
             Err(error) => return Err(io::Error::other(error)),
         };
 
