@@ -9,26 +9,49 @@ while ! docker container ls > /dev/null 2>&1; do
   sleep 1
 done
 
-# Start Docuum in the background.
+# Start Docuum in the background, redirecting its output to a log file so we
+# can synchronize with it by watching for specific log messages.
 echo 'Starting Docuum…'
-LOG_LEVEL=debug /docuum-x86_64-unknown-linux-musl --threshold '20 MB' --keep 'alpine:keep' &
+DOCUUM_LOG=$(mktemp)
+LOG_LEVEL=debug /docuum-x86_64-unknown-linux-musl --threshold '20 MB' --keep 'alpine:keep' \
+  >"$DOCUUM_LOG" 2>&1 &
 DOCUUM_PID="$!"
 
-# This function waits for Docuum to start sleeping by checking the process state. The process could
-# be sleeping for many reasons, so this function may return prematurely. In that case, the
-# integration test may fail flakily. To make that outcome less likely, we repeat this procedure
-# several times at a 1 second interval.
-wait_for_docuum() {
-  echo 'Waiting for Docuum to sleep…'
-  for _ in {0..7}; do
-    sleep 1
-    while [[ "$(awk '{ print $3 }' /proc/$DOCUUM_PID/stat)" != 'S' ]]; do
-      sleep 1
-    done
+# Wait for Docuum to finish its initial vacuum and start listening for events.
+wait_for_startup() {
+  echo 'Waiting for Docuum to start listening…'
+  until grep -q 'Listening for Docker events' "$DOCUUM_LOG" 2>/dev/null; do
+    sleep 0.5
   done
 }
 
-wait_for_docuum
+# Wait for Docuum to finish processing all pending Docker events. This is more
+# reliable than polling the process state (which only tells us the process is
+# blocked on *some* syscall, not necessarily the event-read). We wait for new
+# "Going back to sleep" log messages (emitted after each event is fully
+# processed, including any vacuum), then wait for the count to stabilize for
+# 2 seconds to ensure all events from the current batch are processed.
+PREV_SLEEP_COUNT=0
+wait_for_docuum() {
+  echo 'Waiting for Docuum to go quiet…'
+  local count new_count
+  # Wait for at least one new "Going back to sleep" message.
+  while true; do
+    count=$(grep -c 'Going back to sleep' "$DOCUUM_LOG" 2>/dev/null || echo 0)
+    [[ "$count" -gt "$PREV_SLEEP_COUNT" ]] && break
+    sleep 0.5
+  done
+  # Wait for the count to stop increasing (quiescence).
+  while true; do
+    sleep 2
+    new_count=$(grep -c 'Going back to sleep' "$DOCUUM_LOG" 2>/dev/null || echo 0)
+    [[ "$new_count" -eq "$count" ]] && break
+    count="$new_count"
+  done
+  PREV_SLEEP_COUNT="$count"
+}
+
+wait_for_startup
 
 # This image uses ~5.5 MB.
 echo "Using an image we don't want to delete…"
