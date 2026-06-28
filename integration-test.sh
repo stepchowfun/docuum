@@ -14,7 +14,7 @@ done
 echo 'Starting Docuum…'
 DOCUUM_LOG="$(mktemp)"
 LOG_LEVEL=debug /docuum-x86_64-unknown-linux-musl --threshold '20 MB' --keep 'alpine:keep' \
-  >"$DOCUUM_LOG" 2>&1 &
+  > "$DOCUUM_LOG" 2>&1 &
 DOCUUM_PID="$!"
 
 # Wait for Docuum to finish its initial vacuum and start listening for events.
