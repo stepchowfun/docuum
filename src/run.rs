@@ -860,11 +860,16 @@ pub fn run(
         }
     }));
 
-    // Handle each incoming event.
+    // Handle each incoming event. The integration test relies on this log message to determine
+    // when Docuum has finished starting up [tag:listening_for_docker_events].
     info!("Listening for Docker events\u{2026}");
     for line_option in reader.lines() {
         // Unwrap the line.
         let line = line_option?;
+
+        // The integration test relies on this log message to determine when Docuum has received
+        // an event. Since events are processed sequentially, this message also implies all
+        // previous events have been fully processed [tag:incoming_event].
         trace!("Incoming event: {}", line.code_str());
 
         // Parse the line as an event.
