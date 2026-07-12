@@ -21,7 +21,7 @@ docker image tag alpine@sha256:f27cad9117495d32d067133afff942cb2dc745dfe9163e949
 # needed because the synchronization logic below relies on Docuum logging each incoming event.
 echo 'Starting Docuum…'
 LOG_FILE="$(mktemp)"
-LOG_LEVEL=trace /docuum-x86_64-unknown-linux-musl --threshold '20 MB' --keep 'alpine:keep' \
+LOG_LEVEL=trace /docuum-x86_64-unknown-linux-musl --threshold '30 MB' --keep 'alpine:keep' \
   > "$LOG_FILE" 2>&1 &
 DOCUUM_PID="$!"
 
@@ -84,8 +84,8 @@ docker container rm docuum-test-2
 
 wait_for_docuum
 
-# This image also uses ~5.5 MB. For some reason, this pushes us over the 20 MB
-# threshold, even though we've only downloaded ~5.5 MB * 3 = ~16.5 MB.
+# This image also uses ~5.5 MB. Docker's reported image usage is higher than the compressed pull
+# size, so adding this image pushes us over the 30 MB threshold.
 echo 'Using another image…'
 docker container run --name docuum-test-3 \
   alpine@sha256:4d889c14e7d5a73929ab00be2ef8ff22437e7cbc545931e52554a7b00e123d8b true
