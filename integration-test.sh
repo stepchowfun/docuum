@@ -9,6 +9,14 @@ while ! docker container ls > /dev/null 2>&1; do
   sleep 1
 done
 
+# This image uses ~5.5 MB. Pull and tag it before Docuum starts so the protected image is already
+# present when Docuum performs its initial vacuum.
+echo "Preparing an image we don't want to delete..."
+docker image pull \
+  alpine@sha256:f27cad9117495d32d067133afff942cb2dc745dfe9163e949f6bfe8a6a245339
+docker image tag alpine@sha256:f27cad9117495d32d067133afff942cb2dc745dfe9163e949f6bfe8a6a245339 \
+  alpine:keep
+
 # Start Docuum in the background, capturing its output in a log file. Trace-level logging is
 # needed because the synchronization logic below relies on Docuum logging each incoming event.
 echo 'Starting Docuum…'
@@ -67,18 +75,6 @@ wait_for_docuum_to_start() {
 }
 
 wait_for_docuum_to_start
-
-# This image uses ~5.5 MB. We remove the container explicitly rather than using `--rm` because
-# `--rm` removes the container asynchronously, which would allow the resulting events to arrive
-# after the sentinel event emitted by `wait_for_docuum`.
-echo "Using an image we don't want to delete…"
-docker container run --name docuum-test-1 \
-  alpine@sha256:f27cad9117495d32d067133afff942cb2dc745dfe9163e949f6bfe8a6a245339 true
-docker container rm docuum-test-1
-docker image tag alpine@sha256:f27cad9117495d32d067133afff942cb2dc745dfe9163e949f6bfe8a6a245339 \
-  alpine:keep
-
-wait_for_docuum
 
 # This image also uses ~5.5 MB.
 echo 'Using another image…'
