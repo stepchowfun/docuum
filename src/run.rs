@@ -678,14 +678,13 @@ fn vacuum(
     if let Some(regex_set) = keep {
         sorted_image_nodes.retain(|(_, image_node)| {
             for repository_tag in &image_node.image_record.repository_tags {
-                if regex_set.is_match(&format!(
-                    "{}:{}",
-                    repository_tag.repository,
-                    repository_tag.tag,
-                )) {
+                // This string is used both for matching and for explaining why an image was kept.
+                let repository_tag_string =
+                    format!("{}:{}", repository_tag.repository, repository_tag.tag);
+                if regex_set.is_match(&repository_tag_string) {
                     debug!(
                         "Ignored image {} due to the {} flag.",
-                        format!("{}:{}", repository_tag.repository, repository_tag.tag).code_str(),
+                        repository_tag_string.code_str(),
                         "--keep".code_str(),
                     );
                     return false;
