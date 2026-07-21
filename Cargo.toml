@@ -19,15 +19,15 @@ rust.warnings = "deny"
 [dependencies]
 byte-unit = "5.2.5"
 chrono = "0.4.45"
-clap = { version = "4.6.2", features = ["derive", "wrap_help"] }
+clap = { version = "4.6.3", features = ["derive", "wrap_help"] }
 colored = "3.1.1"
 dirs = "6.0.0"
 env_logger = "0.11.11"
 humantime = "2.4.0"
 log = "0.4.33"
 regex = { version = "1.13.1", default-features = false, features = ["std", "unicode-perl"] }
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.150"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
 yaml_serde = "0.10.4"
 tempfile = "3.27.0"
 
