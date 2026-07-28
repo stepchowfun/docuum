@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+    <dict>
+        <key>Label</key>
+        <string>local.docuum</string>
+        <key>Program</key>
+        <string>/usr/local/bin/docuum</string>
+        <key>ProgramArguments</key>
+        <array>
+            <string>/usr/local/bin/docuum</string>
+            <string>--threshold</string>
+            <string>10 GB</string>
+        </array>
+        <key>StandardOutPath</key>
+        <string>/var/log/docuum.log</string>
+        <key>StandardErrorPath</key>
+        <string>/var/log/docuum.log</string>
+        <key>EnvironmentVariables</key>
+        <dict>
+            <key>PATH</key>
+            <string>/bin:/usr/bin:/usr/local/bin</string>
+        </dict>
+        <key>KeepAlive</key>
+        <true/>
+    </dict>
+</plist>
