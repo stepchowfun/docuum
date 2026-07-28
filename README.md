@@ -161,60 +161,17 @@ The instructions below for configuring your operating system to run Docuum as a 
 
 ### Configuring your operating system to run the binary as a daemon
 
+The repository provides sample service definitions for running Docuum as a daemon. Adjust the paths, arguments, and other settings in these files as needed before installing them.
+
 #### Creating a launchd service on macOS
 
-On macOS, [launchd](https://www.launchd.info/) can be used to run Docuum as a daemon. Create a file (owned by root) called `/Library/LaunchDaemons/local.docuum.plist` with the following contents, adjusting the arguments as needed:
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-    <dict>
-        <key>Label</key>
-        <string>local.docuum</string>
-        <key>Program</key>
-        <string>/usr/local/bin/docuum</string>
-        <key>ProgramArguments</key>
-        <array>
-            <string>/usr/local/bin/docuum</string>
-            <string>--threshold</string>
-            <string>10 GB</string>
-        </array>
-        <key>StandardOutPath</key>
-        <string>/var/log/docuum.log</string>
-        <key>StandardErrorPath</key>
-        <string>/var/log/docuum.log</string>
-        <key>EnvironmentVariables</key>
-        <dict>
-            <key>PATH</key>
-            <string>/bin:/usr/bin:/usr/local/bin</string>
-        </dict>
-        <key>KeepAlive</key>
-        <true/>
-    </dict>
-</plist>
-```
+On macOS, [launchd](https://www.launchd.info/) can be used to run Docuum as a daemon. Copy [`local.docuum.plist`](local.docuum.plist) to `/Library/LaunchDaemons/` and make sure the file is owned by root.
 
 Run `sudo launchctl load /Library/LaunchDaemons/local.docuum.plist` to start the service. You can view the logs with `tail -F /var/log/docuum.log`.
 
 #### Creating a systemd service on Linux
 
-On most Linux distributions, [systemd](https://www.freedesktop.org/wiki/Software/systemd/) can be used to run Docuum as a daemon. Create a file (owned by root) called `/etc/systemd/system/docuum.service` with the following contents, adjusting the arguments as needed:
-
-```ini
-[Unit]
-Description=Docuum
-After=docker.service
-Wants=docker.service
-
-[Service]
-Environment='THRESHOLD=10 GB'
-ExecStart=/usr/local/bin/docuum --threshold ${THRESHOLD}
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-```
+On most Linux distributions, [systemd](https://www.freedesktop.org/wiki/Software/systemd/) can be used to run Docuum as a daemon. Copy [`docuum.service`](docuum.service) to `/etc/systemd/system/` and make sure the file is owned by root.
 
 Run `sudo systemctl enable docuum --now` to enable and start the service. You can view the logs with `sudo journalctl --follow --unit docuum`.
 
