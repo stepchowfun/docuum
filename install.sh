@@ -13,9 +13,6 @@
   # Where the binary will be installed
   DESTINATION="${PREFIX:-/usr/local/bin}/docuum"
 
-  # Which version to download
-  RELEASE="v${VERSION:-0.27.0}"
-
   # Determine which binary to download.
   FILENAME=''
   if uname -a | grep -qi 'x86_64.*GNU/Linux'; then
@@ -56,10 +53,15 @@
   # Compute the full file path.
   SOURCE="$TEMPDIR/$FILENAME"
 
+  # Download the requested version, or the latest published version by default.
+  if [ -n "${VERSION:-}" ]; then
+    DOWNLOAD_URL="https://github.com/stepchowfun/docuum/releases/download/v$VERSION/$FILENAME"
+  else
+    DOWNLOAD_URL="https://github.com/stepchowfun/docuum/releases/latest/download/$FILENAME"
+  fi
+
   # Download the binary.
-  curl \
-    "https://github.com/stepchowfun/docuum/releases/download/$RELEASE/$FILENAME" \
-    -o "$SOURCE" -LSf || fail 'There was an error downloading the binary.'
+  curl "$DOWNLOAD_URL" -o "$SOURCE" -LSf || fail 'There was an error downloading the binary.'
 
   # Make it executable.
   chmod a+x "$SOURCE" || fail 'There was an error setting the permissions for the binary.'
