@@ -165,13 +165,13 @@ The repository provides sample service definitions for running Docuum as a daemo
 
 #### Creating a launchd service on macOS
 
-On macOS, [launchd](https://www.launchd.info/) can be used to run Docuum as a daemon. Copy [`local.docuum.plist`](local.docuum.plist) to `/Library/LaunchDaemons/` and make sure the file is owned by root.
+On macOS, [launchd](https://www.launchd.info/) can be used to run Docuum as a daemon. Copy [`local.docuum.plist`](service_configs/local.docuum.plist) from the `service_configs` directory to `/Library/LaunchDaemons/` and make sure the file is owned by root.
 
 Run `sudo launchctl load /Library/LaunchDaemons/local.docuum.plist` to start the service. You can view the logs with `tail -F /var/log/docuum.log`.
 
 #### Creating a systemd service on Linux
 
-On most Linux distributions, [systemd](https://www.freedesktop.org/wiki/Software/systemd/) can be used to run Docuum as a daemon. Copy [`docuum.service`](docuum.service) to `/etc/systemd/system/` and make sure the file is owned by root.
+On most Linux distributions, [systemd](https://www.freedesktop.org/wiki/Software/systemd/) can be used to run Docuum as a daemon. Copy [`docuum.service`](service_configs/docuum.service) from the `service_configs` directory to `/etc/systemd/system/` and make sure the file is owned by root.
 
 Run `sudo systemctl enable docuum --now` to enable and start the service. You can view the logs with `sudo journalctl --follow --unit docuum`.
 
