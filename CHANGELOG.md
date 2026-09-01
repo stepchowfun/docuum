@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.27.1] - 2026-09-01
+
+### Changed
+- Dependencies, Rust, and GitHub Actions have been updated.
+
+### Fixed
+- Docuum no longer inspects containers with the `dead` status.
+
 ## [0.27.0] - 2026-04-05
 
 ### Changed
