@@ -26,9 +26,9 @@ use sysinfo::{Disk, Disks};
 // maximum number of container IDs to query at once.
 const CONTAINER_IDS_CHUNK_SIZE: usize = 100;
 
-// The `docker container inspect` command seems to fail on containers with this status. Source:
+// The `docker container inspect` command seems to fail on containers with these statuses. Source:
 // https://github.com/stepchowfun/docuum/issues/237
-const CONTAINER_STATUS_REMOVING: &str = "removing";
+const UNINSPECTABLE_CONTAINER_STATUSES: [&str; 2] = ["dead", "removing"];
 
 // These are all the possible statuses returned from `docker container ls`. Source:
 //   https://docs.docker.com/reference/cli/docker/container/ls/#status
@@ -39,7 +39,7 @@ const CONTAINER_STATUSES: [&str; 7] = [
     "paused",
     "restarting",
     "running",
-    CONTAINER_STATUS_REMOVING,
+    "removing",
 ];
 
 // A Docker event (a line of output from `docker system events --format '{{json .}}'`)
@@ -253,7 +253,7 @@ fn image_ids_in_use() -> io::Result<HashSet<String>> {
                 .chain(
                     CONTAINER_STATUSES
                         .iter()
-                        .filter(|&&status| status != CONTAINER_STATUS_REMOVING)
+                        .filter(|&&status| !UNINSPECTABLE_CONTAINER_STATUSES.contains(&status))
                         .flat_map(|&status| [String::from("--filter"), format!("status={status}")]),
                 )
                 .chain(
