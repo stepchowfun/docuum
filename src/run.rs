@@ -37,9 +37,9 @@ const CONTAINER_STATUSES: [&str; 7] = [
     "dead",
     "exited",
     "paused",
+    "removing",
     "restarting",
     "running",
-    "removing",
 ];
 
 // A Docker event (a line of output from `docker system events --format '{{json .}}'`)
@@ -946,13 +946,25 @@ pub fn run(
 
 #[cfg(test)]
 mod tests {
-    use super::{ImageNode, ImageRecord, RepositoryTag, construct_polyforest, parse_docker_date};
+    use super::{
+        CONTAINER_STATUSES, ImageNode, ImageRecord, RepositoryTag,
+        UNINSPECTABLE_CONTAINER_STATUSES, construct_polyforest, parse_docker_date,
+    };
     use crate::state::{self, State};
     use std::{
         collections::{HashMap, HashSet},
         io,
         time::Duration,
     };
+
+    #[test]
+    fn uninspectable_container_statuses_are_container_statuses() {
+        assert!(
+            UNINSPECTABLE_CONTAINER_STATUSES
+                .iter()
+                .all(|status| CONTAINER_STATUSES.contains(status)),
+        );
+    }
 
     #[test]
     fn parse_docker_date_valid() {
