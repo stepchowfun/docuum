@@ -90,8 +90,8 @@ jobs:
         #   https://github.com/rust-lang/rustup/issues/2441
         #
         # for more information.
-        rustup toolchain install 1.98.0 --no-self-update # [ref:rust_1.98.0]
-        rustup default 1.98.0 # [ref:rust_1.98.0]
+        rustup toolchain install 1.98.1 --no-self-update # [ref:rust_1.98.1]
+        rustup default 1.98.1 # [ref:rust_1.98.1]
 
         # Add the targets.
         rustup target add x86_64-pc-windows-msvc
@@ -131,8 +131,8 @@ jobs:
         set -euxo pipefail
 
         # Install the appropriate version of Rust.
-        rustup toolchain install 1.98.0 # [ref:rust_1.98.0]
-        rustup default 1.98.0 # [ref:rust_1.98.0]
+        rustup toolchain install 1.98.1 # [ref:rust_1.98.1]
+        rustup default 1.98.1 # [ref:rust_1.98.1]
 
         # Add the targets.
         rustup target add x86_64-apple-darwin
@@ -211,8 +211,8 @@ jobs:
         set -euxo pipefail
 
         # Install the appropriate version of Rust.
-        rustup toolchain install 1.98.0 # [ref:rust_1.98.0]
-        rustup default 1.98.0 # [ref:rust_1.98.0]
+        rustup toolchain install 1.98.1 # [ref:rust_1.98.1]
+        rustup default 1.98.1 # [ref:rust_1.98.1]
 
         # Fetch the program version.
         VERSION="$(cargo pkgid | cut -d# -f2 | cut -d: -f2)"
@@ -255,11 +255,11 @@ jobs:
         chmod a+x artifacts/docuum-x86_64-unknown-linux-musl
         chmod a+x artifacts/docuum-aarch64-unknown-linux-musl
     - if: ${{ env.VERSION_TO_PUBLISH != null }}
-      uses: docker/setup-buildx-action@v4.3.0 # For building multi-platform images
+      uses: docker/setup-buildx-action@v4.4.1 # For building multi-platform images
     - if: ${{ env.VERSION_TO_PUBLISH != null }}
-      uses: docker/setup-qemu-action@v4.2.0 # For building multi-platform images
+      uses: docker/setup-qemu-action@v4.4.0 # For building multi-platform images
     - if: ${{ env.VERSION_TO_PUBLISH != null }}
-      uses: docker/build-push-action@v7.3.0
+      uses: docker/build-push-action@v7.4.0
       with:
         context: .
         push: true
@@ -273,7 +273,7 @@ jobs:
         set -euxo pipefail
 
         # Run the Docker image to validate it. The image has already been published (since the
-        # `docker/build-push-action@v7.3.0` action unfortunately doesn't support importing multi-
+        # `docker/build-push-action@v7.4.0` action unfortunately doesn't support importing multi-
         # platform images into a local Docker installation), but we still validate it now anyway.
         docker run \
           --init \
