@@ -3,6 +3,9 @@ use crate::{
     format::CodeStr,
     state::{self, State},
 };
+
+#[cfg(target_os = "linux")]
+use crate::format::CodePath;
 use byte_unit::{Byte, UnitType};
 use chrono::{DateTime, Utc};
 use regex::RegexSet;
@@ -366,7 +369,7 @@ fn get_disk_by_file<'a>(disks: &'a [Disk], path: &Path) -> io::Result<&'a Disk> 
         .ok_or_else(|| {
             io::Error::other(format!(
                 "Unable to find disk for path {}.",
-                path.to_string_lossy().code_str(),
+                path.code_path(),
             ))
         })
 }
