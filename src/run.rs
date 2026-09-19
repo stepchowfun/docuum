@@ -1,6 +1,6 @@
 use crate::{
     Settings, Threshold,
-    format::CodeStr,
+    format::{CodePath, CodeStr},
     state::{self, State},
 };
 use byte_unit::{Byte, UnitType};
