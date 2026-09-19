@@ -1,8 +1,11 @@
 use crate::{
     Settings, Threshold,
-    format::{CodePath, CodeStr},
+    format::CodeStr,
     state::{self, State},
 };
+
+#[cfg(target_os = "linux")]
+use crate::format::CodePath;
 use byte_unit::{Byte, UnitType};
 use chrono::{DateTime, Utc};
 use regex::RegexSet;
