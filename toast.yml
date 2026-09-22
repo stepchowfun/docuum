@@ -164,8 +164,7 @@ tasks:
     input_paths:
       - .
     excluded_input_paths:
-      # [group:excluded_input_paths] Keep this in sync with [file:.gitignore] and
-      # [file:.dockerignore].
+      # Keep this in sync with [group:excluded_input_paths].
       - .git
       - artifacts
       - target

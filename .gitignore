@@ -1,4 +1,3 @@
-# Keep this in sync with [group:excluded_input_paths] and [file:.dockerignore],
-# but don't ignore /.git/ since Git already ignores it.
+# Keep this in sync with [group:excluded_input_paths], but don't ignore /.git/ since Git already ignores it.
 /artifacts/
 /target/
