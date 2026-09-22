@@ -1,4 +1,4 @@
-# Keep this in sync with [ref:excluded_input_paths] and [file:.gitignore], but
+# Keep this in sync with [group:excluded_input_paths] and [file:.gitignore], but
 # don't ignore /artifacts/.
 /.git/
 /target/
