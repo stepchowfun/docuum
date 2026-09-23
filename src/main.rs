@@ -5,13 +5,14 @@ mod state;
 use crate::{format::CodeStr, run::run};
 use byte_unit::Byte;
 use chrono::Local;
-use clap::{ArgAction, Parser};
+use clap::{ArgAction, Parser, ValueEnum};
 use env_logger::{Builder, fmt::style::Effects};
 use humantime::parse_duration;
 use log::LevelFilter;
 use regex::RegexSet;
 use std::{
     env,
+    fmt::{Display, Formatter},
     io::{self, IsTerminal, Write},
     process::exit,
     str::FromStr,
@@ -112,6 +113,15 @@ struct Cli {
     _version: Option<bool>,
 
     #[arg(
+        value_enum,
+        short,
+        long,
+        help = "Container engine to target",
+        default_value_t = Engine::Docker
+    )]
+    engine: Engine,
+
+    #[arg(
         short,
         long,
         help = "Set the maximum amount of space to use for Docker images",
@@ -145,12 +155,31 @@ struct Cli {
     min_age: Option<String>,
 }
 
-// This struct represents the parsed command-line arguments.
+/// Represents the parsed command-line arguments.
 pub struct Settings {
+    engine: Engine,
     deletion_chunk_size: usize,
     keep: Option<RegexSet>,
     min_age: Option<Duration>,
     threshold: Threshold,
+}
+
+/// Container engine to target.
+#[derive(Clone, Copy, Debug, PartialEq, ValueEnum)]
+enum Engine {
+    /// Docker container engine
+    Docker,
+    /// Podman container engine
+    Podman,
+}
+
+impl Display for Engine {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Docker => "Docker",
+            Self::Podman => "Podman",
+        })
+    }
 }
 
 // Set up the logger.
@@ -212,6 +241,7 @@ fn settings() -> io::Result<Settings> {
     let threshold = Threshold::from_str(&cli.threshold)?;
 
     Ok(Settings {
+        engine: cli.engine,
         deletion_chunk_size,
         keep,
         min_age,

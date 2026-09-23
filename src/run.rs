@@ -1,5 +1,5 @@
 use crate::{
-    Settings, Threshold,
+    Engine, Settings, Threshold,
     format::CodeStr,
     state::{self, State},
 };
@@ -11,8 +11,10 @@ use chrono::{DateTime, Utc};
 use regex::RegexSet;
 use serde::{Deserialize, Serialize};
 use std::{
+    borrow::Cow,
     cmp::max,
     collections::{HashMap, HashSet, hash_map::Entry},
+    ffi::{OsStr, OsString},
     io::{self, BufRead, BufReader},
     ops::Deref,
     process::{Command, Stdio},
@@ -237,7 +239,7 @@ fn list_image_records(state: &State) -> io::Result<HashMap<String, ImageRecord>>
             }
         } else {
             return Err(io::Error::other(
-                "Failed to parse image list output from Docker.",
+                "Failed to parse image list output.",
             ));
         }
     }
@@ -246,26 +248,37 @@ fn list_image_records(state: &State) -> io::Result<HashMap<String, ImageRecord>>
 }
 
 // Ask Docker for the IDs of the images currently in use by containers.
-fn image_ids_in_use() -> io::Result<HashSet<String>> {
+fn image_ids_in_use(engine: Engine) -> io::Result<HashSet<String>> {
+    fn str_to_oscow(s: &str) -> Cow<'_, OsStr> {
+        <str as AsRef<OsStr>>::as_ref(s).into()
+    }
+
+    // Build argument vector for querying list of container IDs
+    //
+    // Works around issue #237
+    // (Docker reports unactionable container states.)
+    let mut container_ids_args: Vec<Cow<'static, OsStr>> =
+        ["container", "ls", "--all"].into_iter().map(str_to_oscow).collect();
+    if engine == Engine::Docker {
+        container_ids_args.extend(
+            CONTAINER_STATUSES
+            .iter()
+            .filter(|&&status|
+                !UNINSPECTABLE_CONTAINER_STATUSES.contains(&status)
+            )
+            .flat_map(|&status| [
+                str_to_oscow("--filter"),
+                OsString::from(format!("status={status}")).into()
+            ])
+        );
+    }
+    container_ids_args.extend(
+        ["--no-trunc", "--format", "{{.ID}}"].into_iter().map(str_to_oscow)
+    );
+
     // Query Docker for all the container IDs.
     let container_ids_output = Command::new("docker")
-        .args(
-            ["container", "ls", "--all"]
-                .into_iter()
-                .map(std::string::ToString::to_string)
-                .chain(
-                    CONTAINER_STATUSES
-                        .iter()
-                        .filter(|&&status| !UNINSPECTABLE_CONTAINER_STATUSES.contains(&status))
-                        .flat_map(|&status| [String::from("--filter"), format!("status={status}")]),
-                )
-                .chain(
-                    ["--no-trunc", "--format", "{{.ID}}"]
-                        .into_iter()
-                        .map(std::string::ToString::to_string),
-                )
-                .collect::<Vec<String>>(),
-        )
+        .args(container_ids_args)
         .stderr(Stdio::inherit())
         .output()?;
 
@@ -349,7 +362,7 @@ fn docker_root_dir() -> io::Result<PathBuf> {
     // Ensure the command succeeded.
     if !output.status.success() {
         return Err(io::Error::other(
-            "Unable to determine the Docker root directory.",
+            "Unable to determine root directory.",
         ));
     }
 
@@ -640,6 +653,7 @@ fn vacuum(
     state: &mut State,
     first_run: bool,
     threshold: Byte,
+    engine: Engine,
     keep: Option<&RegexSet>,
     deletion_chunk_size: usize,
     min_age: Option<Duration>,
@@ -648,7 +662,7 @@ fn vacuum(
     let image_records = list_image_records(state)?;
 
     // Find all images in use by containers.
-    let image_ids_in_use = image_ids_in_use()?;
+    let image_ids_in_use = image_ids_in_use(engine)?;
 
     // Construct a polyforest of image nodes that reflects their parent-child relationships.
     let polyforest = construct_polyforest(state, first_run, &image_records, &image_ids_in_use)?;
@@ -726,7 +740,8 @@ fn vacuum(
     let space = space_usage()?;
     if space > threshold {
         info!(
-            "Docker images are currently using {}, but the limit is {}.",
+            "{} images are currently using {}, but the limit is {}.",
+            engine,
             space
                 .get_appropriate_unit(UnitType::Decimal)
                 .to_string()
@@ -754,7 +769,7 @@ fn vacuum(
             let new_space = space_usage()?;
             if new_space <= threshold {
                 info!(
-                    "Docker images are now using {}, which is within the limit of {}.",
+                    "{engine} images are now using {}, which is within the limit of {}.",
                     new_space
                         .get_appropriate_unit(UnitType::Decimal)
                         .to_string()
@@ -769,7 +784,7 @@ fn vacuum(
         }
     } else {
         debug!(
-            "Docker images are using {}, which is within the limit of {}.",
+            "{engine} images are using {}, which is within the limit of {}.",
             space
                 .get_appropriate_unit(UnitType::Decimal)
                 .to_string()
@@ -800,6 +815,7 @@ fn vacuum(
 
 // Stream Docker events and vacuum when necessary.
 #[allow(clippy::type_complexity)]
+#[allow(clippy::too_many_lines)]
 pub fn run(
     settings: &Settings,
     state: &mut State,
@@ -836,6 +852,7 @@ pub fn run(
         state,
         *first_run,
         threshold,
+        settings.engine,
         settings.keep.as_ref(),
         settings.deletion_chunk_size,
         settings.min_age,
@@ -864,7 +881,7 @@ pub fn run(
 
     // Handle each incoming event. The integration test relies on this log message to determine
     // when Docuum has finished starting up [tag:listening_for_docker_events].
-    info!("Listening for Docker events\u{2026}");
+    info!("Listening for {0} events\u{2026}", settings.engine);
     for line_option in reader.lines() {
         // Unwrap the line.
         let line = line_option?;
@@ -927,6 +944,7 @@ pub fn run(
                 state,
                 *first_run,
                 threshold,
+                settings.engine,
                 settings.keep.as_ref(),
                 settings.deletion_chunk_size,
                 settings.min_age,
