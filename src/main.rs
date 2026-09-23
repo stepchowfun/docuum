@@ -124,6 +124,13 @@ struct Cli {
     #[arg(
         short,
         long,
+        help = "Path to engine binary to execute\n\n[default: \"docker\" or \"podman\" depending on `--engine`]",
+    )]
+    command: Option<String>,
+
+    #[arg(
+        short,
+        long,
         help = "Set the maximum amount of space to use for Docker images",
         default_value = DEFAULT_THRESHOLD
     )]
@@ -158,6 +165,7 @@ struct Cli {
 /// Represents the parsed command-line arguments.
 pub struct Settings {
     engine: Engine,
+    command: String,
     deletion_chunk_size: usize,
     keep: Option<RegexSet>,
     min_age: Option<Duration>,
@@ -242,6 +250,12 @@ fn settings() -> io::Result<Settings> {
 
     Ok(Settings {
         engine: cli.engine,
+        command: cli.command.unwrap_or_else(||
+            String::from(match cli.engine {
+                Engine::Docker => "docker",
+                Engine::Podman => "podman",
+            })
+        ),
         deletion_chunk_size,
         keep,
         min_age,
