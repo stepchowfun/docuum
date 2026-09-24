@@ -1,5 +1,5 @@
 use crate::{
-    Settings, Threshold,
+    Engine, Settings, Threshold,
     format::CodeStr,
     state::{self, State},
 };
@@ -11,8 +11,10 @@ use chrono::{DateTime, Utc};
 use regex::RegexSet;
 use serde::{Deserialize, Serialize};
 use std::{
+    borrow::Cow,
     cmp::max,
     collections::{HashMap, HashSet, hash_map::Entry},
+    ffi::{OsStr, OsString},
     io::{self, BufRead, BufReader},
     ops::Deref,
     process::{Command, Stdio},
@@ -113,9 +115,9 @@ struct ImageNode {
 }
 
 // Ask Docker for the ID of an image.
-fn image_id(image: &str) -> io::Result<String> {
+fn image_id(command: &str, image: &str) -> io::Result<String> {
     // Query Docker for the image ID.
-    let output = Command::new("docker")
+    let output = Command::new(command)
         .args(["image", "inspect", "--format", "{{.ID}}", image])
         .stderr(Stdio::inherit())
         .output()?;
@@ -135,14 +137,14 @@ fn image_id(image: &str) -> io::Result<String> {
 }
 
 // Get the ID of the parent of an image (if the parent exists), querying Docker if necessary.
-fn parent_id(state: &State, image_id: &str) -> io::Result<Option<String>> {
+fn parent_id(command: &str, state: &State, image_id: &str) -> io::Result<Option<String>> {
     // If we already know the parent, just return it.
     if let Some(image) = state.images.get(image_id) {
         return Ok(image.parent_id.clone());
     }
 
     // Query Docker for the parent image ID.
-    let output = Command::new("docker")
+    let output = Command::new(command)
         .args(["image", "inspect", "--format", "{{.Parent}}", image_id])
         .output()?;
 
@@ -185,9 +187,9 @@ fn parent_id(state: &State, image_id: &str) -> io::Result<Option<String>> {
 }
 
 // Query Docker for all the images.
-fn list_image_records(state: &State) -> io::Result<HashMap<String, ImageRecord>> {
+fn list_image_records(command: &str, state: &State) -> io::Result<HashMap<String, ImageRecord>> {
     // Get the IDs and creation timestamps of all the images.
-    let output = Command::new("docker")
+    let output = Command::new(command)
         .args([
             "image",
             "ls",
@@ -229,7 +231,7 @@ fn list_image_records(state: &State) -> io::Result<HashMap<String, ImageRecord>>
                 }
                 Entry::Vacant(entry) => {
                     entry.insert(ImageRecord {
-                        parent_id: parent_id(state, id)?,
+                        parent_id: parent_id(command, state, id)?,
                         created_since_epoch: parse_docker_date(date_str)?,
                         repository_tags: vec![repository_tag],
                     });
@@ -237,7 +239,7 @@ fn list_image_records(state: &State) -> io::Result<HashMap<String, ImageRecord>>
             }
         } else {
             return Err(io::Error::other(
-                "Failed to parse image list output from Docker.",
+                "Failed to parse image list output.",
             ));
         }
     }
@@ -246,26 +248,37 @@ fn list_image_records(state: &State) -> io::Result<HashMap<String, ImageRecord>>
 }
 
 // Ask Docker for the IDs of the images currently in use by containers.
-fn image_ids_in_use() -> io::Result<HashSet<String>> {
+fn image_ids_in_use(command: &str, engine: Engine) -> io::Result<HashSet<String>> {
+    fn str_to_oscow(s: &str) -> Cow<'_, OsStr> {
+        <str as AsRef<OsStr>>::as_ref(s).into()
+    }
+
+    // Build argument vector for querying list of container IDs
+    //
+    // Works around issue #237
+    // (Docker reports unactionable container states.)
+    let mut container_ids_args: Vec<Cow<'static, OsStr>> =
+        ["container", "ls", "--all"].into_iter().map(str_to_oscow).collect();
+    if engine == Engine::Docker {
+        container_ids_args.extend(
+            CONTAINER_STATUSES
+            .iter()
+            .filter(|&&status|
+                !UNINSPECTABLE_CONTAINER_STATUSES.contains(&status)
+            )
+            .flat_map(|&status| [
+                str_to_oscow("--filter"),
+                OsString::from(format!("status={status}")).into()
+            ])
+        );
+    }
+    container_ids_args.extend(
+        ["--no-trunc", "--format", "{{.ID}}"].into_iter().map(str_to_oscow)
+    );
+
     // Query Docker for all the container IDs.
-    let container_ids_output = Command::new("docker")
-        .args(
-            ["container", "ls", "--all"]
-                .into_iter()
-                .map(std::string::ToString::to_string)
-                .chain(
-                    CONTAINER_STATUSES
-                        .iter()
-                        .filter(|&&status| !UNINSPECTABLE_CONTAINER_STATUSES.contains(&status))
-                        .flat_map(|&status| [String::from("--filter"), format!("status={status}")]),
-                )
-                .chain(
-                    ["--no-trunc", "--format", "{{.ID}}"]
-                        .into_iter()
-                        .map(std::string::ToString::to_string),
-                )
-                .collect::<Vec<String>>(),
-        )
+    let container_ids_output = Command::new(command)
+        .args(container_ids_args)
         .stderr(Stdio::inherit())
         .output()?;
 
@@ -296,7 +309,7 @@ fn image_ids_in_use() -> io::Result<HashSet<String>> {
     let mut image_ids = HashSet::new();
     for chunk in container_ids.chunks(CONTAINER_IDS_CHUNK_SIZE) {
         // Query Docker for the image IDs for this chunk.
-        let image_ids_output = Command::new("docker")
+        let image_ids_output = Command::new(command)
             .args(
                 ["container", "inspect", "--format", "{{.Image}}"]
                     .iter()
@@ -339,9 +352,9 @@ fn image_ids_in_use() -> io::Result<HashSet<String>> {
 
 // Determine Docker's root directory.
 #[cfg(target_os = "linux")]
-fn docker_root_dir() -> io::Result<PathBuf> {
+fn docker_root_dir(command: &str) -> io::Result<PathBuf> {
     // Query Docker for it.
-    let output = Command::new("docker")
+    let output = Command::new(command)
         .args(["system", "info", "--format", "{{.DockerRootDir}}"])
         .stderr(Stdio::inherit())
         .output()?;
@@ -349,7 +362,7 @@ fn docker_root_dir() -> io::Result<PathBuf> {
     // Ensure the command succeeded.
     if !output.status.success() {
         return Err(io::Error::other(
-            "Unable to determine the Docker root directory.",
+            "Unable to determine root directory.",
         ));
     }
 
@@ -376,8 +389,8 @@ fn get_disk_by_file<'a>(disks: &'a [Disk], path: &Path) -> io::Result<&'a Disk> 
 
 // Find size of filesystem on which docker root directory is stored.
 #[cfg(target_os = "linux")]
-fn docker_root_dir_filesystem_size() -> io::Result<Byte> {
-    let root_dir = docker_root_dir()?;
+fn docker_root_dir_filesystem_size(command: &str) -> io::Result<Byte> {
+    let root_dir = docker_root_dir(command)?;
     let disks = Disks::new_with_refreshed_list();
     let disk = get_disk_by_file(&disks, &root_dir)?;
     Ok(Byte::from(disk.total_space()))
@@ -385,9 +398,9 @@ fn docker_root_dir_filesystem_size() -> io::Result<Byte> {
 
 // Get the total space used by Docker images.
 #[allow(clippy::map_err_ignore)]
-fn space_usage() -> io::Result<Byte> {
+fn space_usage(command: &str) -> io::Result<Byte> {
     // Query Docker for the space usage.
-    let output = Command::new("docker")
+    let output = Command::new(command)
         .args(["system", "df", "--format", "{{json .}}"])
         .stderr(Stdio::inherit())
         .output()?;
@@ -428,11 +441,11 @@ fn space_usage() -> io::Result<Byte> {
 }
 
 // Delete a Docker image.
-fn delete_image(image: &str) -> io::Result<()> {
+fn delete_image(command: &str, image: &str) -> io::Result<()> {
     info!("Deleting image {}\u{2026}", image.code_str());
 
     // Tell Docker to delete the image.
-    let mut child = Command::new("docker")
+    let mut child = Command::new(command)
         .args(["image", "rm", "--force", "--no-prune", image])
         .spawn()?;
 
@@ -449,7 +462,7 @@ fn delete_image(image: &str) -> io::Result<()> {
 
 // Update the timestamp for an image.
 // Returns a boolean indicating if a new entry was created for the image.
-fn touch_image(state: &mut State, image_id: &str, verbose: bool) -> io::Result<bool> {
+fn touch_image(command: &str, state: &mut State, image_id: &str, verbose: bool) -> io::Result<bool> {
     if verbose {
         debug!(
             "Updating last-used timestamp for image {}\u{2026}",
@@ -471,7 +484,7 @@ fn touch_image(state: &mut State, image_id: &str, verbose: bool) -> io::Result<b
                 .insert(
                     image_id.to_owned(),
                     state::Image {
-                        parent_id: parent_id(state, image_id)?,
+                        parent_id: parent_id(command, state, image_id)?,
                         last_used_since_epoch: duration,
                     },
                 )
@@ -635,20 +648,23 @@ fn construct_polyforest(
 }
 
 // The main vacuum logic
+#[allow(clippy::too_many_arguments)]
 #[allow(clippy::too_many_lines)]
 fn vacuum(
     state: &mut State,
     first_run: bool,
     threshold: Byte,
+    command: &str,
+    engine: Engine,
     keep: Option<&RegexSet>,
     deletion_chunk_size: usize,
     min_age: Option<Duration>,
 ) -> io::Result<()> {
     // Find all images.
-    let image_records = list_image_records(state)?;
+    let image_records = list_image_records(command, state)?;
 
     // Find all images in use by containers.
-    let image_ids_in_use = image_ids_in_use()?;
+    let image_ids_in_use = image_ids_in_use(command, engine)?;
 
     // Construct a polyforest of image nodes that reflects their parent-child relationships.
     let polyforest = construct_polyforest(state, first_run, &image_records, &image_ids_in_use)?;
@@ -723,10 +739,11 @@ fn vacuum(
 
     // Check if we're over the threshold.
     let mut deleted_image_ids = HashSet::new();
-    let space = space_usage()?;
+    let space = space_usage(command)?;
     if space > threshold {
         info!(
-            "Docker images are currently using {}, but the limit is {}.",
+            "{} images are currently using {}, but the limit is {}.",
+            engine,
             space
                 .get_appropriate_unit(UnitType::Decimal)
                 .to_string()
@@ -741,7 +758,7 @@ fn vacuum(
         for image_ids in sorted_image_nodes.chunks_mut(deletion_chunk_size) {
             for (image_id, _) in image_ids {
                 // Delete the image.
-                if let Err(error) = delete_image(image_id) {
+                if let Err(error) = delete_image(command, image_id) {
                     // The deletion failed. Just log the error and proceed.
                     error!("{error}");
                 } else {
@@ -751,10 +768,10 @@ fn vacuum(
             }
 
             // Break if we're within the threshold.
-            let new_space = space_usage()?;
+            let new_space = space_usage(command)?;
             if new_space <= threshold {
                 info!(
-                    "Docker images are now using {}, which is within the limit of {}.",
+                    "{engine} images are now using {}, which is within the limit of {}.",
                     new_space
                         .get_appropriate_unit(UnitType::Decimal)
                         .to_string()
@@ -769,7 +786,7 @@ fn vacuum(
         }
     } else {
         debug!(
-            "Docker images are using {}, which is within the limit of {}.",
+            "{engine} images are using {}, which is within the limit of {}.",
             space
                 .get_appropriate_unit(UnitType::Decimal)
                 .to_string()
@@ -800,6 +817,7 @@ fn vacuum(
 
 // Stream Docker events and vacuum when necessary.
 #[allow(clippy::type_complexity)]
+#[allow(clippy::too_many_lines)]
 pub fn run(
     settings: &Settings,
     state: &mut State,
@@ -822,7 +840,7 @@ pub fn run(
                 clippy::cast_possible_truncation,
                 clippy::cast_sign_loss
             )]
-            Byte::from_u128((p * docker_root_dir_filesystem_size()?.as_u128() as f64) as u128)
+            Byte::from_u128((p * docker_root_dir_filesystem_size(&settings.command)?.as_u128() as f64) as u128)
                 .unwrap()
         }
     };
@@ -836,6 +854,8 @@ pub fn run(
         state,
         *first_run,
         threshold,
+        &settings.command,
+        settings.engine,
         settings.keep.as_ref(),
         settings.deletion_chunk_size,
         settings.min_age,
@@ -844,7 +864,7 @@ pub fn run(
     *first_run = false;
 
     // Spawn `docker system events --format '{{json .}}'`.
-    let mut child = Command::new("docker")
+    let mut child = Command::new(&settings.command)
         .args(["system", "events", "--format", "{{json .}}"])
         .stdout(Stdio::piped()) // [tag:stdout]
         .spawn()?;
@@ -864,7 +884,7 @@ pub fn run(
 
     // Handle each incoming event. The integration test relies on this log message to determine
     // when Docuum has finished starting up [tag:listening_for_docker_events].
-    info!("Listening for Docker events\u{2026}");
+    info!("Listening for {0} events\u{2026}", settings.engine);
     for line_option in reader.lines() {
         // Unwrap the line.
         let line = line_option?;
@@ -900,7 +920,7 @@ pub fn run(
             trace!("Skipping due to irrelevance.");
             continue;
         };
-        let image_id = match image_id(&image_reference) {
+        let image_id = match image_id(&settings.command, &image_reference) {
             Ok(image_id) => image_id,
             Err(error) => {
                 if event.r#type == "image" && matches!(event.action.as_str(), "delete" | "untag") {
@@ -921,12 +941,14 @@ pub fn run(
         debug!("Waking up\u{2026}");
 
         // Update the timestamp for this image.
-        if touch_image(state, &image_id, true)? {
+        if touch_image(&settings.command, state, &image_id, true)? {
             // Run the main vacuum logic only if a new image came in.
             vacuum(
                 state,
                 *first_run,
                 threshold,
+                &settings.command,
+                settings.engine,
                 settings.keep.as_ref(),
                 settings.deletion_chunk_size,
                 settings.min_age,
