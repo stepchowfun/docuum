@@ -13,6 +13,12 @@ FROM --platform=$TARGETPLATFORM alpine:3.23.4
 # Install the Docker CLI.
 RUN apk add --no-cache docker-cli
 
+# Install Podman-Remote without pulling in the misspecified dependencies for local execution.
+RUN apk fetch podman-remote && tar -xvf podman-remote-*.apk -C / usr/bin/podman-remote && rm podman-remote-*.apk
+
+# Make Podman-Remote available under its usual name.
+RUN ln /usr/bin/podman-remote /usr/bin/podman
+
 # Install Docuum.
 COPY --from=build /usr/local/bin/docuum /usr/local/bin/docuum
 

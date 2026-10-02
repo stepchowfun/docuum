@@ -4,10 +4,22 @@
 set -euxo pipefail
 
 # See [ref:integration_test_step] for how to run this integration test.
+ENGINE=docker
+if [ $# -gt 0 ];
+then
+  if [ "$1" = "podman" ];
+  then
+    ENGINE=podman
+  elif [ "$1" != "docker" ];
+  then
+    echo "Unexpected argument: Must be “docker” or “podman”" >&2
+    exit 1
+  fi
+fi
 
 # Wait for the Docker daemon to start up.
-echo 'Waiting for Docker to start…'
-while ! docker container ls > /dev/null 2>&1; do
+echo 'Waiting for $ENGINE to start…'
+while ! "$ENGINE" container ls > /dev/null 2>&1; do
   sleep 1
 done
 
@@ -54,13 +66,13 @@ build_test_image() {
   # Regenerate the payload so Docker cannot deduplicate layers across test images.
   echo "Building $IMAGE…"
   head -c "$IMAGE_SIZE_BYTES" /dev/urandom > "$BUILD_CONTEXT_DIR/payload"
-  docker image build --no-cache --tag "$IMAGE" "$BUILD_CONTEXT_DIR"
+  "$ENGINE" image build --no-cache --tag "$IMAGE" "$BUILD_CONTEXT_DIR"
 }
 
 # Print Docker's current image space usage in bytes.
 image_space_bytes() {
   # Parse the human-readable image size reported by `docker system df`.
-  docker system df --format '{{.Type}}\t{{.Size}}' | awk '
+  "$ENGINE" system df --format '{{.Type}}\t{{.Size}}' | awk '
     $1 == "Images" {
       SIZE = $2
       if (SIZE ~ /kB$/) {
@@ -99,7 +111,7 @@ echo "Using a threshold of $THRESHOLD_BYTES bytes…"
 # Start Docuum in the background, capturing its output in a log file. Trace-level logging is
 # needed because the synchronization logic below relies on Docuum logging each incoming event.
 echo 'Starting Docuum…'
-LOG_LEVEL=trace /docuum-x86_64-unknown-linux-musl --threshold "$THRESHOLD_BYTES B" \
+LOG_LEVEL=trace /docuum-x86_64-unknown-linux-musl --engine "$ENGINE" --threshold "$THRESHOLD_BYTES B" \
   --keep "$PROTECTED_IMAGE:latest" \
   > "$LOG_FILE" 2>&1 &
 DOCUUM_PID="$!"
@@ -116,8 +128,8 @@ wait_for_docuum() {
   # Emit a sentinel network event.
   echo 'Waiting for Docuum to process events…'
   SENTINEL_INDEX="$((SENTINEL_INDEX + 1))"
-  docker network create "docuum-sentinel-$SENTINEL_INDEX" > /dev/null
-  docker network rm "docuum-sentinel-$SENTINEL_INDEX" > /dev/null
+  "$ENGINE" network create "docuum-sentinel-$SENTINEL_INDEX" > /dev/null
+  "$ENGINE" network rm "docuum-sentinel-$SENTINEL_INDEX" > /dev/null
 
   # Wait until Docuum has received the sentinel event.
   while ! grep -q "docuum-sentinel-$SENTINEL_INDEX" "$LOG_FILE"; do
@@ -142,8 +154,8 @@ wait_for_docuum_to_start() {
   local PROBE_INDEX=0
   while ! grep -q 'docuum-probe-' "$LOG_FILE"; do
     PROBE_INDEX="$((PROBE_INDEX + 1))"
-    docker network create "docuum-probe-$PROBE_INDEX" > /dev/null
-    docker network rm "docuum-probe-$PROBE_INDEX" > /dev/null
+    "$ENGINE" network create "docuum-probe-$PROBE_INDEX" > /dev/null
+    "$ENGINE" network rm "docuum-probe-$PROBE_INDEX" > /dev/null
     sleep 1
   done
 }
@@ -153,7 +165,7 @@ wait_for_docuum_to_start
 
 # Assert that the first non-protected image is still present before the threshold has been exceeded.
 echo 'Checking that the first non-protected image is still present…'
-docker image inspect "$EVICTED_IMAGE" > /dev/null 2>&1
+"$ENGINE" image inspect "$EVICTED_IMAGE" > /dev/null 2>&1
 
 # Build the latest image after Docuum is listening so the build emits events Docuum must process.
 build_test_image "$LATEST_IMAGE"
@@ -163,15 +175,15 @@ wait_for_docuum
 
 # Assert that the image protected by the `--keep` flag is still present.
 echo 'Checking that the protected image is still present…'
-docker image inspect "$PROTECTED_IMAGE" > /dev/null 2>&1
+"$ENGINE" image inspect "$PROTECTED_IMAGE" > /dev/null 2>&1
 
 # Assert that the last image is still present.
 echo 'Checking that the last image is still present…'
-docker image inspect "$LATEST_IMAGE" > /dev/null 2>&1
+"$ENGINE" image inspect "$LATEST_IMAGE" > /dev/null 2>&1
 
 # Assert that the first non-protected image was deleted.
 echo 'Checking that the first non-protected image was deleted…'
-if docker image inspect "$EVICTED_IMAGE" > /dev/null 2>&1
+if "$ENGINE" image inspect "$EVICTED_IMAGE" > /dev/null 2>&1
 then
   echo "The image wasn't deleted."
   exit 1
