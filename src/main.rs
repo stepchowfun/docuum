@@ -105,6 +105,7 @@ impl Threshold {
         env!("CARGO_PKG_HOMEPAGE")
     ),
     version,
+    display_name = "Docuum",
     disable_version_flag = true
 )]
 struct Cli {
