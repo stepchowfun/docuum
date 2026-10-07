@@ -3,9 +3,6 @@ use crate::{
     format::CodeStr,
     state::{self, State},
 };
-
-#[cfg(target_os = "linux")]
-use crate::format::CodeStr;
 use byte_unit::{Byte, UnitType};
 use chrono::{DateTime, Utc};
 use regex::RegexSet;
