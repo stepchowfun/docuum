@@ -1,4 +1,4 @@
-use crate::format::CodePath;
+use crate::format::CodeStr;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -57,7 +57,7 @@ pub fn load() -> io::Result<State> {
         // Log what we are trying to do in case an error occurs.
         trace!(
             "Attempting to load the state from {}\u{2026}",
-            path.code_path(),
+            path.code_str(),
         );
 
         // Read the YAML from disk.
@@ -76,7 +76,7 @@ pub fn save(state: &State) -> io::Result<()> {
     // Check if we have a path.
     if let Some(path) = path() {
         // Log what we're trying to do in case an error occurs.
-        trace!("Persisting the state to {}\u{2026}", path.code_path());
+        trace!("Persisting the state to {}\u{2026}", path.code_str());
 
         // The `unwrap` is safe due to [ref:state_path_has_parent].
         let parent = path.parent().unwrap().to_owned();

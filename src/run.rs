@@ -3,9 +3,6 @@ use crate::{
     format::CodeStr,
     state::{self, State},
 };
-
-#[cfg(target_os = "linux")]
-use crate::format::CodePath;
 use byte_unit::{Byte, UnitType};
 use chrono::{DateTime, Utc};
 use regex::RegexSet;
@@ -367,10 +364,7 @@ fn get_disk_by_file<'a>(disks: &'a [Disk], path: &Path) -> io::Result<&'a Disk> 
         .filter(|d| path.starts_with(d.mount_point()))
         .max_by_key(|d| d.mount_point().as_os_str().len())
         .ok_or_else(|| {
-            io::Error::other(format!(
-                "Unable to find disk for path {}.",
-                path.code_path(),
-            ))
+            io::Error::other(format!("Unable to find disk for path {}.", path.code_str()))
         })
 }
 
