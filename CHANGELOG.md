@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [unreleased] – …
+
+### Added
+- Podman is now officially supported and a related regression introduced in v0.27.1 was fixed
+- Is is now possible to provide the path to the Podman or Docker binary on the command-line
+
 ## [0.27.1] - 2026-09-01
 
 ### Changed

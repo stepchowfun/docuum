@@ -2,9 +2,9 @@
 
 [![Build status](https://github.com/stepchowfun/docuum/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/stepchowfun/docuum/actions?query=branch%3Amain)
 
-*Docuum* performs least recently used (LRU) eviction of Docker images to keep the disk usage below a given threshold.
+*Docuum* performs least recently used (LRU) eviction of Docker images in Docker or Podman to keep the disk usage below a given threshold.
 
-Docker's built-in `docker image prune --all --filter until=…` command serves a similar purpose. However, the built-in solution isn't ideal since it uses the image creation time, rather than the last usage time, to determine which images to remove. That means it can delete frequently used images, which may be expensive to rebuild or time-consuming to pull.
+Docker’s built-in `docker image prune --all --filter until=…` command serves a similar purpose. However, the built-in solution isn't ideal since it uses the image creation time, rather than the last usage time, to determine which images to remove. That means it can delete frequently used images, which may be expensive to rebuild or time-consuming to pull.
 
 Docuum is ideal for use cases such as continuous integration (CI) workers, developer workstations, or any other environment in which Docker images accumulate on disk over time. Docuum works well with tools like [Toast](https://github.com/stepchowfun/toast) and [Docker Compose](https://docs.docker.com/compose/).
 
@@ -17,7 +17,7 @@ Docuum is used by Netflix (on its production Kubernetes nodes) and Airbnb (on it
 When Docuum first starts and subsequently whenever a new Docker event comes in, LRU eviction is performed until the total disk usage due to Docker images is below the given threshold. This design has a few advantages over evicting images based on a fixed [time to live](https://en.wikipedia.org/wiki/Time_to_live) (TTL), which is what various other tools in the Docker ecosystem do:
 
 1. There is no need to configure and tune an interval to run on. Docuum evicts images immediately whenever the disk usage exceeds the threshold without waiting for any timers.
-2. Docuum uses no CPU resources when there is no Docker activity. You can run it on your laptop without worrying about draining your battery.
+2. Docuum uses no CPU resources when there is no Docker/Podman activity. You can run it on your laptop without worrying about draining your battery.
 3. In order to prevent your disk from filling up, it's more straightforward to set a threshold based on disk usage rather than guessing an appropriate maximum image age.
 
 Docuum also respects the parent-child relationships between images. In particular, it will delete children of a parent before deleting the parent (even if the children were used more recently than the parent), because Docker doesn't allow images with children to be deleted.
@@ -30,7 +30,7 @@ Once Docuum is [installed](#installation-instructions), you can run it manually 
 docuum --threshold '10 GB'
 ```
 
-Docuum will then start listening for Docker events. You can use `Ctrl`+`C` to stop it.
+Docuum will then start listening for Docker or Podman events. You can use `Ctrl`+`C` to stop it.
 
 You probably want to run Docuum as a [daemon](https://en.wikipedia.org/wiki/Daemon_\(computing\)), e.g., with [launchd](https://www.launchd.info/), [systemd](https://www.freedesktop.org/wiki/Software/systemd/), etc. See the [Configuring your operating system to run the binary as a daemon](#configuring-your-operating-system-to-run-the-binary-as-a-daemon) section below for instructions.
 
@@ -42,6 +42,10 @@ Usage: docuum [OPTIONS]
 Options:
   -v, --version
           Print version
+  -e, --engine [docker|podman]
+          Container engine to target [default: docker]
+  -c, --command <COMMAND>
+          Path to engine binary to execute [default: "docker" or "podman" depending on `--engine`]
   -t, --threshold <THRESHOLD>
           Set the maximum amount of space to use for Docker images [default: "10 GB"]
   -k, --keep <REGEX>
@@ -139,6 +143,19 @@ docker container run \
   stephanmisc/docuum --threshold '10 GB'
 ```
 
+For Podman, you must have Podman listening in daemon mode running on the host (`podman system service`), then you can Docuum using Podman:
+
+```sh
+docker container run \
+  --init \
+  --rm \
+  --tty \
+  --name docuum \
+  --mount type=bind,src=/run/podman/podman.sock,dst=/run/podman/podman.sock \
+  --mount type=volume,source=docuum,target=/root \
+  stephanmisc/docuum --threshold '10 GB' --engine podman
+```
+
 If you're on a Windows system configured to run Linux containers, use this command:
 
 ```powershell
@@ -154,10 +171,10 @@ docker container run `
 
 We don't currently publish a Windows-based image, because some Windows machines (namely, those which run containers with process isolation rather than Hyper-V) can only run Windows containers that were built for the exact build of Windows (e.g., 1809) which is running on the host. This makes Windows-based images less portable, and as a result we'd need to publish a separate Windows-based image for each build of Windows we want to support. At this time, we don't have the infrastructure to do that.
 
-The instructions below for configuring your operating system to run Docuum as a daemon assume it's installed as an executable binary. If you prefer to run it as a Docker container, change the relevant service definition to run a Docker command like the relevant one above, with the following adjustments:
+The instructions below for configuring your operating system to run Docuum as a daemon assume it's installed as an executable binary. If you prefer to run it as a Docker container, change the relevant service definition to run a Docker or Podman command like the relevant one above, with the following adjustments:
 
 - Omit the `--tty` flag. This prevents Docuum from printing colored logs, which you probably don't want for a daemon.
-- Configure Docker as a hard dependency. Ordinarily, Docuum and Docker can be started in any order, and Docuum will patiently wait for Docker to start if needed. However, when running Docuum as a Docker container, then of course Docker must be started first.
+- If using Docker, configure Docker as a hard dependency. Ordinarily, Docuum and Docker can be started in any order, and Docuum will patiently wait for Docker to start if needed. However, when running Docuum as a Docker container, then of course Docker must be started first.
 
 ### Configuring your operating system to run the binary as a daemon
 
