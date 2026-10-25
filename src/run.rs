@@ -14,7 +14,7 @@ use std::{
     ops::Deref,
     process::{Command, Stdio},
     sync::{Arc, Mutex},
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 #[cfg(target_os = "linux")]
@@ -25,6 +25,11 @@ use sysinfo::{Disk, Disks};
 // When querying Docker for the image IDs corresponding to a list of container IDs, this is the
 // maximum number of container IDs to query at once.
 const CONTAINER_IDS_CHUNK_SIZE: usize = 100;
+
+// How long a cached image ID remains valid. Image events also invalidate the cache, so this only
+// bounds staleness for changes that Docker doesn't report as events. It should exceed common
+// healthcheck intervals, since each healthcheck produces several container events.
+const IMAGE_ID_CACHE_TTL: Duration = Duration::from_mins(5);
 
 // The `docker container inspect` command seems to fail on containers with these statuses. Source:
 // https://github.com/stepchowfun/docuum/issues/237
@@ -129,6 +134,56 @@ fn image_id(image: &str) -> io::Result<String> {
     String::from_utf8(output.stdout)
         .map(|output| output.trim().to_owned())
         .map_err(io::Error::other)
+}
+
+// A cache from image references to image IDs, which avoids querying Docker for every event
+struct ImageIdCache {
+    // Map from image reference to image ID and the time at which it was resolved
+    entries: HashMap<String, (String, Instant)>,
+}
+
+impl ImageIdCache {
+    // Construct an empty cache.
+    fn new() -> Self {
+        Self {
+            entries: HashMap::new(),
+        }
+    }
+
+    // Return the ID of an image, using `resolve` to compute it if it isn't cached or is stale.
+    fn get(
+        &mut self,
+        image: &str,
+        now: Instant,
+        resolve: impl FnOnce(&str) -> io::Result<String>,
+    ) -> io::Result<String> {
+        // Use the cached ID if it's fresh enough.
+        if let Some((image_id, resolved_at)) = self.entries.get(image)
+            && now.duration_since(*resolved_at) < IMAGE_ID_CACHE_TTL
+        {
+            trace!(
+                "Using cached ID {} for image {}.",
+                image_id.code_str(),
+                image.code_str(),
+            );
+            return Ok(image_id.clone());
+        }
+
+        // Evict stale entries so the cache doesn't grow without bound.
+        self.entries
+            .retain(|_, (_, resolved_at)| now.duration_since(*resolved_at) < IMAGE_ID_CACHE_TTL);
+
+        // Resolve the ID and remember it.
+        let image_id = resolve(image)?;
+        self.entries
+            .insert(image.to_owned(), (image_id.clone(), now));
+        Ok(image_id)
+    }
+
+    // Forget all cached IDs.
+    fn clear(&mut self) {
+        self.entries.clear();
+    }
 }
 
 // Get the ID of the parent of an image (if the parent exists), querying Docker if necessary.
@@ -793,7 +848,7 @@ fn vacuum(
 }
 
 // Stream Docker events and vacuum when necessary.
-#[allow(clippy::type_complexity)]
+#[allow(clippy::too_many_lines, clippy::type_complexity)]
 pub fn run(
     settings: &Settings,
     state: &mut State,
@@ -856,6 +911,10 @@ pub fn run(
         }
     }));
 
+    // Resolve image references to IDs via a cache. It starts empty on each run, since events may
+    // have been missed while not listening.
+    let mut image_id_cache = ImageIdCache::new();
+
     // Handle each incoming event. The integration test relies on this log message to determine
     // when Docuum has finished starting up [tag:listening_for_docker_events].
     info!("Listening for Docker events\u{2026}");
@@ -894,7 +953,14 @@ pub fn run(
             trace!("Skipping due to irrelevance.");
             continue;
         };
-        let image_id = match image_id(&image_reference) {
+        let image_id_result = if event.r#type == "image" {
+            // Image events can change what references point to, so they invalidate the cache.
+            image_id_cache.clear();
+            image_id(&image_reference)
+        } else {
+            image_id_cache.get(&image_reference, Instant::now(), image_id)
+        };
+        let image_id = match image_id_result {
             Ok(image_id) => image_id,
             Err(error) => {
                 if event.r#type == "image" && matches!(event.action.as_str(), "delete" | "untag") {
@@ -944,14 +1010,14 @@ pub fn run(
 #[cfg(test)]
 mod tests {
     use super::{
-        CONTAINER_STATUSES, ImageNode, ImageRecord, RepositoryTag,
-        UNINSPECTABLE_CONTAINER_STATUSES, construct_polyforest, parse_docker_date,
+        CONTAINER_STATUSES, IMAGE_ID_CACHE_TTL, ImageIdCache, ImageNode, ImageRecord,
+        RepositoryTag, UNINSPECTABLE_CONTAINER_STATUSES, construct_polyforest, parse_docker_date,
     };
     use crate::state::{self, State};
     use std::{
         collections::{HashMap, HashSet},
         io,
-        time::Duration,
+        time::{Duration, Instant},
     };
 
     #[test]
@@ -961,6 +1027,81 @@ mod tests {
                 .iter()
                 .all(|status| CONTAINER_STATUSES.contains(status)),
         );
+    }
+
+    // Resolve any image to a fixed ID, for testing `ImageIdCache`.
+    fn resolve_to(image_id: &str) -> impl FnOnce(&str) -> io::Result<String> {
+        move |_| Ok(image_id.to_owned())
+    }
+
+    #[test]
+    fn image_id_cache_hit() -> io::Result<()> {
+        let mut cache = ImageIdCache::new();
+        let now = Instant::now();
+
+        assert_eq!(cache.get("alpine", now, resolve_to("id-0"))?, "id-0");
+        assert_eq!(
+            cache.get("alpine", now + IMAGE_ID_CACHE_TTL / 2, |_| {
+                panic!("The cached ID should have been used.")
+            })?,
+            "id-0",
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn image_id_cache_expiry() -> io::Result<()> {
+        let mut cache = ImageIdCache::new();
+        let now = Instant::now();
+
+        assert_eq!(cache.get("alpine", now, resolve_to("id-0"))?, "id-0");
+        assert_eq!(
+            cache.get("alpine", now + IMAGE_ID_CACHE_TTL, resolve_to("id-1"))?,
+            "id-1",
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn image_id_cache_eviction() -> io::Result<()> {
+        let mut cache = ImageIdCache::new();
+        let now = Instant::now();
+
+        cache.get("alpine", now, resolve_to("id-0"))?;
+        cache.get("debian", now + IMAGE_ID_CACHE_TTL, resolve_to("id-1"))?;
+
+        assert_eq!(cache.entries.len(), 1);
+        assert!(cache.entries.contains_key("debian"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn image_id_cache_clear() -> io::Result<()> {
+        let mut cache = ImageIdCache::new();
+        let now = Instant::now();
+
+        cache.get("alpine", now, resolve_to("id-0"))?;
+        cache.clear();
+
+        assert_eq!(cache.get("alpine", now, resolve_to("id-1"))?, "id-1");
+
+        Ok(())
+    }
+
+    #[test]
+    fn image_id_cache_error() {
+        let mut cache = ImageIdCache::new();
+        let now = Instant::now();
+
+        assert!(
+            cache
+                .get("alpine", now, |_| Err(io::Error::other("No such image.")))
+                .is_err(),
+        );
+        assert!(cache.entries.is_empty());
     }
 
     #[test]
