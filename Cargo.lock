@@ -325,7 +325,7 @@ dependencies = [
 
 [[package]]
 name = "docuum"
-version = "0.27.2"
+version = "0.27.3"
 dependencies = [
  "byte-unit",
  "chrono",
