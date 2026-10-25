@@ -32,7 +32,8 @@ const CONTAINER_IDS_CHUNK_SIZE: usize = 100;
 const IMAGE_ID_CACHE_TTL: Duration = Duration::from_mins(5);
 
 // Last-used timestamps are only updated once they're at least this old, which bounds how often the
-// state is persisted when an image is used repeatedly (e.g., by healthchecks).
+// state is persisted when an image is used repeatedly (e.g., by healthchecks)
+// [tag:last_used_granularity].
 const LAST_USED_GRANULARITY: Duration = Duration::from_mins(1);
 
 // The `docker container inspect` command seems to fail on containers with these statuses. Source:
@@ -513,7 +514,8 @@ enum Touch {
     Unchanged,
 }
 
-// Update the timestamp for an image.
+// Update the timestamp for an image, unless the existing one is recent
+// [ref:last_used_granularity].
 fn touch_image(state: &mut State, image_id: &str, verbose: bool) -> io::Result<Touch> {
     // Get the current timestamp.
     let now = SystemTime::now()
@@ -1011,7 +1013,7 @@ pub fn run(
             }
         };
 
-        // Inform the user that we're about to vacuum.
+        // Inform the user that we're handling an event.
         debug!("Waking up\u{2026}");
 
         // Update the timestamp for this image.
