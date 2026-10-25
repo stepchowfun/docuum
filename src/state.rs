@@ -18,7 +18,7 @@ pub struct Image {
     pub parent_id: Option<String>,
 
     // The amount of time that has passed between the UNIX epoch and the moment the image was most
-    // recently used
+    // recently used, accurate to within the granularity defined in [ref:last_used_granularity]
     pub last_used_since_epoch: Duration,
 }
 
