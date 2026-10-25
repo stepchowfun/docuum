@@ -31,6 +31,10 @@ const CONTAINER_IDS_CHUNK_SIZE: usize = 100;
 // healthcheck intervals, since each healthcheck produces several container events.
 const IMAGE_ID_CACHE_TTL: Duration = Duration::from_mins(5);
 
+// Last-used timestamps are only updated once they're at least this old, which bounds how often the
+// state is persisted when an image is used repeatedly (e.g., by healthchecks).
+const LAST_USED_GRANULARITY: Duration = Duration::from_mins(1);
+
 // The `docker container inspect` command seems to fail on containers with these statuses. Source:
 // https://github.com/stepchowfun/docuum/issues/237
 const UNINSPECTABLE_CONTAINER_STATUSES: [&str; 2] = ["dead", "removing"];
@@ -496,9 +500,45 @@ fn delete_image(image: &str) -> io::Result<()> {
     Ok(())
 }
 
+// The effect of updating the timestamp for an image
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Touch {
+    // A new entry was created for the image.
+    New,
+
+    // The timestamp of an existing entry was updated.
+    Updated,
+
+    // The existing timestamp was recent enough to leave as is.
+    Unchanged,
+}
+
 // Update the timestamp for an image.
-// Returns a boolean indicating if a new entry was created for the image.
-fn touch_image(state: &mut State, image_id: &str, verbose: bool) -> io::Result<bool> {
+fn touch_image(state: &mut State, image_id: &str, verbose: bool) -> io::Result<Touch> {
+    // Get the current timestamp.
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| {
+            io::Error::other(format!(
+                "Unable to compute the current timestamp: {error:?}.",
+            ))
+        })?;
+
+    // Leave recent timestamps alone so the state doesn't need to be persisted for every event. A
+    // timestamp in the future (e.g., due to the clock moving backward) is always replaced.
+    if let Some(image) = state.images.get(image_id)
+        && now
+            .checked_sub(image.last_used_since_epoch)
+            .is_some_and(|elapsed| elapsed < LAST_USED_GRANULARITY)
+    {
+        trace!(
+            "Skipping update of recent last-used timestamp for image {}.",
+            image_id.code_str(),
+        );
+        return Ok(Touch::Unchanged);
+    }
+
+    // Log what we're about to do.
     if verbose {
         debug!(
             "Updating last-used timestamp for image {}\u{2026}",
@@ -511,25 +551,19 @@ fn touch_image(state: &mut State, image_id: &str, verbose: bool) -> io::Result<b
         );
     }
 
-    // Get the current timestamp.
-    match SystemTime::now().duration_since(UNIX_EPOCH) {
-        Ok(duration) => {
-            // Store the image metadata in the state.
-            Ok(state
-                .images
-                .insert(
-                    image_id.to_owned(),
-                    state::Image {
-                        parent_id: parent_id(state, image_id)?,
-                        last_used_since_epoch: duration,
-                    },
-                )
-                .is_none())
-        }
-        Err(error) => Err(io::Error::other(format!(
-            "Unable to compute the current timestamp: {error:?}.",
-        ))),
-    }
+    // Store the image metadata in the state.
+    let previous = state.images.insert(
+        image_id.to_owned(),
+        state::Image {
+            parent_id: parent_id(state, image_id)?,
+            last_used_since_epoch: now,
+        },
+    );
+    Ok(if previous.is_none() {
+        Touch::New
+    } else {
+        Touch::Updated
+    })
 }
 
 // Parse the non-standard timestamp format Docker uses for `docker image ls`.
@@ -981,7 +1015,8 @@ pub fn run(
         debug!("Waking up\u{2026}");
 
         // Update the timestamp for this image.
-        if touch_image(state, &image_id, true)? {
+        let touch = touch_image(state, &image_id, true)?;
+        if touch == Touch::New {
             // Run the main vacuum logic only if a new image came in.
             vacuum(
                 state,
@@ -993,8 +1028,10 @@ pub fn run(
             )?;
         }
 
-        // Persist the state.
-        state::save(state)?;
+        // Persist the state, unless nothing changed.
+        if touch != Touch::Unchanged {
+            state::save(state)?;
+        }
 
         // Inform the user that we're done for now.
         debug!("Going back to sleep\u{2026}");
@@ -1011,13 +1048,14 @@ pub fn run(
 mod tests {
     use super::{
         CONTAINER_STATUSES, IMAGE_ID_CACHE_TTL, ImageIdCache, ImageNode, ImageRecord,
-        RepositoryTag, UNINSPECTABLE_CONTAINER_STATUSES, construct_polyforest, parse_docker_date,
+        LAST_USED_GRANULARITY, RepositoryTag, Touch, UNINSPECTABLE_CONTAINER_STATUSES,
+        construct_polyforest, parse_docker_date, touch_image,
     };
     use crate::state::{self, State};
     use std::{
         collections::{HashMap, HashSet},
         io,
-        time::{Duration, Instant},
+        time::{Duration, Instant, SystemTime, UNIX_EPOCH},
     };
 
     #[test]
@@ -1102,6 +1140,63 @@ mod tests {
                 .is_err(),
         );
         assert!(cache.entries.is_empty());
+    }
+
+    // Construct a state containing a single image with the given last-used timestamp.
+    fn state_with_image(image_id: &str, last_used_since_epoch: Duration) -> State {
+        let mut images = HashMap::new();
+        images.insert(
+            image_id.to_owned(),
+            state::Image {
+                parent_id: None,
+                last_used_since_epoch,
+            },
+        );
+        State { images }
+    }
+
+    #[test]
+    fn touch_image_recent() -> io::Result<()> {
+        let image_id = "sha256:fe6ac15c7fac4b9b3a4c7c6eba0b1c8e0e3d2b3a1b0c9d8e7f6a5b4c3d2e1f0a";
+        let last_used = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(io::Error::other)?;
+        let mut state = state_with_image(image_id, last_used);
+
+        assert_eq!(touch_image(&mut state, image_id, false)?, Touch::Unchanged);
+        assert_eq!(state.images[image_id].last_used_since_epoch, last_used);
+
+        Ok(())
+    }
+
+    #[test]
+    fn touch_image_stale() -> io::Result<()> {
+        let image_id = "sha256:fe6ac15c7fac4b9b3a4c7c6eba0b1c8e0e3d2b3a1b0c9d8e7f6a5b4c3d2e1f0a";
+        let last_used = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(io::Error::other)?
+            .saturating_sub(LAST_USED_GRANULARITY);
+        let mut state = state_with_image(image_id, last_used);
+
+        assert_eq!(touch_image(&mut state, image_id, false)?, Touch::Updated);
+        assert!(state.images[image_id].last_used_since_epoch > last_used);
+
+        Ok(())
+    }
+
+    #[test]
+    fn touch_image_future() -> io::Result<()> {
+        let image_id = "sha256:fe6ac15c7fac4b9b3a4c7c6eba0b1c8e0e3d2b3a1b0c9d8e7f6a5b4c3d2e1f0a";
+        let last_used = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(io::Error::other)?
+            + Duration::from_hours(1);
+        let mut state = state_with_image(image_id, last_used);
+
+        assert_eq!(touch_image(&mut state, image_id, false)?, Touch::Updated);
+        assert!(state.images[image_id].last_used_since_epoch < last_used);
+
+        Ok(())
     }
 
     #[test]
