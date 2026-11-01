@@ -432,7 +432,7 @@ fn get_disk_by_file<'a>(disks: &'a [Disk], path: &Path) -> io::Result<&'a Disk> 
 #[cfg(target_os = "linux")]
 fn docker_root_dir_filesystem_size() -> io::Result<Byte> {
     let root_dir = docker_root_dir()?;
-    let disks = Disks::new_with_refreshed_list();
+    let disks = Disks::new_with_refreshed_list().map_err(io::Error::other)?;
     let disk = get_disk_by_file(&disks, &root_dir)?;
     Ok(Byte::from(disk.total_space()))
 }
