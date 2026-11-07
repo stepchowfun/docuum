@@ -75,9 +75,9 @@ Installation consists of two steps:
 
 ### Installing the binary
 
-#### Installation on macOS or Linux (AArch64 or x86-64)
+#### Installation on macOS or Linux
 
-If you're running macOS or Linux (AArch64 or x86-64), you can install Docuum with this command:
+If you're running macOS or Linux, you can install Docuum with this command:
 
 ```sh
 curl https://raw.githubusercontent.com/stepchowfun/docuum/main/install.sh -LSfs | sh
@@ -87,9 +87,9 @@ The same command can be used again to update to the latest version.
 
 If you prefer not to use this installation method, you can download the binary from the [latest release](https://github.com/stepchowfun/docuum/releases/latest), make it executable (e.g., with `chmod`), and place it in some directory in your [`PATH`](https://en.wikipedia.org/wiki/PATH_\(variable\)) (e.g., `/usr/local/bin`).
 
-#### Installation on Windows (AArch64 or x86-64)
+#### Installation on Windows
 
-If you're running Windows (AArch64 or x86-64), download the binary from the [latest release](https://github.com/stepchowfun/docuum/releases/latest) and rename it to `docuum` (or `docuum.exe` if you have file extensions visible). Create a directory called `Docuum` in your `%PROGRAMFILES%` directory (e.g., `C:\Program Files\Docuum`), and place the renamed binary in there. Then, in the "Advanced" tab of the "System Properties" section of Control Panel, click on "Environment Variables..." and add the full path to the new `Docuum` directory to the `PATH` variable under "System variables". Note that the `Program Files` directory might have a different name if Windows is configured for a language other than English.
+If you're running Windows, download the binary from the [latest release](https://github.com/stepchowfun/docuum/releases/latest) and rename it to `docuum` (or `docuum.exe` if you have file extensions visible). Create a directory called `Docuum` in your `%PROGRAMFILES%` directory (e.g., `C:\Program Files\Docuum`), and place the renamed binary in there. Then, in the "Advanced" tab of the "System Properties" section of Control Panel, click on "Environment Variables..." and add the full path to the new `Docuum` directory to the `PATH` variable under "System variables". Note that the `Program Files` directory might have a different name if Windows is configured for a language other than English.
 
 To update an existing installation, simply replace the existing binary.
 
@@ -115,7 +115,7 @@ You can run that command with `--force` to update an existing installation.
 
 #### Running Docuum in a Docker container on a host capable of running Linux containers
 
-If you prefer not to install Docuum on your system and you're running macOS or Linux (AArch64 or x86-64), you can run it in a container:
+If you prefer not to install Docuum on your system and you're running macOS or Linux, you can run it in a container:
 
 ```sh
 docker container run \
@@ -166,7 +166,7 @@ Run `sudo systemctl enable docuum --now` to enable and start the service. You ca
 
 #### Creating an NSSM service on Windows
 
-On Windows, [NSSM](https://nssm.cc/), the "Non-Sucking Service Manager", can be used to run Docuum as a daemon. [Install NSSM](https://nssm.cc/download) by downloading the binary and adding it to your `PATH` (see the [Installation on Windows (AArch64 or x86-64)](#installation-on-windows-aarch64-or-x86-64) section for instructions on how to configure this environment variable), then run Windows Terminal _as Administrator_ and enter the following command:
+On Windows, [NSSM](https://nssm.cc/), the "Non-Sucking Service Manager", can be used to run Docuum as a daemon. [Install NSSM](https://nssm.cc/download) by downloading the binary and adding it to your `PATH` (see the [Installation on Windows](#installation-on-windows) section for instructions on how to configure this environment variable), then run Windows Terminal _as Administrator_ and enter the following command:
 
 ```powershell
 nssm install Docuum
