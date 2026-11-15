@@ -5,6 +5,7 @@ use crate::{
 };
 use byte_unit::{Byte, UnitType};
 use chrono::{DateTime, Utc};
+use log::{debug, error, info, trace};
 use regex::RegexSet;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -438,7 +439,7 @@ fn docker_root_dir_filesystem_size() -> io::Result<Byte> {
 }
 
 // Get the total space used by Docker images.
-#[allow(clippy::map_err_ignore)]
+#[expect(clippy::map_err_ignore)]
 fn space_usage() -> io::Result<Byte> {
     // Query Docker for the space usage.
     let output = Command::new("docker")
@@ -720,7 +721,7 @@ fn construct_polyforest(
 }
 
 // The main vacuum logic
-#[allow(clippy::too_many_lines)]
+#[expect(clippy::too_many_lines)]
 fn vacuum(
     state: &mut State,
     first_run: bool,
@@ -884,7 +885,7 @@ fn vacuum(
 }
 
 // Stream Docker events and vacuum when necessary.
-#[allow(clippy::too_many_lines, clippy::type_complexity)]
+#[expect(clippy::too_many_lines, clippy::type_complexity)]
 pub fn run(
     settings: &Settings,
     state: &mut State,
@@ -902,7 +903,7 @@ pub fn run(
         #[cfg(target_os = "linux")]
         Threshold::Percentage(p) =>
         {
-            #[allow(
+            #[expect(
                 clippy::cast_precision_loss,
                 clippy::cast_possible_truncation,
                 clippy::cast_sign_loss
