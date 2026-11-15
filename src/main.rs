@@ -8,7 +8,7 @@ use chrono::Local;
 use clap::{ArgAction, Parser};
 use env_logger::{Builder, fmt::style::Effects};
 use humantime::parse_duration;
-use log::LevelFilter;
+use log::{LevelFilter, debug, error, info, warn};
 use regex::RegexSet;
 use std::{
     env,
@@ -19,9 +19,6 @@ use std::{
     thread::sleep,
     time::Duration,
 };
-
-#[macro_use]
-extern crate log;
 
 // Defaults
 const DEFAULT_DELETION_CHUNK_SIZE: usize = 1;
@@ -222,7 +219,7 @@ fn settings() -> io::Result<Settings> {
 
 // This function consumes and runs all the registered destructors. We use this mechanism instead of
 // RAII for things that need to be cleaned up even when the process is killed due to a signal.
-#[allow(clippy::type_complexity)]
+#[expect(clippy::type_complexity)]
 fn run_destructors(destructors: &Arc<Mutex<Vec<Box<dyn FnOnce() + Send>>>>) {
     let mut mutex_guard = destructors.lock().unwrap();
     let destructor_fns = std::mem::take(&mut *mutex_guard);
