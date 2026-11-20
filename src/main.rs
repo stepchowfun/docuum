@@ -7,7 +7,7 @@ use byte_unit::Byte;
 use chrono::Local;
 use clap::{ArgAction, Parser};
 use env_logger::{Builder, fmt::style::Effects};
-use humantime::parse_duration;
+use jiff::{SpanRelativeTo, fmt::friendly::SpanParser};
 use log::{LevelFilter, debug, error, info, warn};
 use regex::RegexSet;
 use std::{
@@ -177,6 +177,15 @@ fn set_up_logging() {
         .init();
 }
 
+// Parse a nonnegative elapsed age, with days and weeks independent of daylight-saving changes.
+fn parse_min_age(value: &str) -> io::Result<Duration> {
+    let elapsed = SpanParser::new()
+        .parse_span(value)
+        .and_then(|span| span.to_duration(SpanRelativeTo::days_are_24_hours()))
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+    Duration::try_from(elapsed).map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))
+}
+
 // Parse the command-line arguments.
 fn settings() -> io::Result<Settings> {
     let cli = Cli::parse();
@@ -196,7 +205,7 @@ fn settings() -> io::Result<Settings> {
 
     // Determine the minimum age for images to be considered for deletion.
     let min_age = match cli.min_age.as_deref() {
-        Some(value) => match parse_duration(value) {
+        Some(value) => match parse_min_age(value) {
             Ok(duration) => {
                 debug!("{} parsed as {:?}.", "--min-age".code_str(), duration);
                 Some(duration)
@@ -293,11 +302,58 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::Cli;
+    use super::{Cli, parse_min_age};
     use clap::CommandFactory;
+    use std::{io::ErrorKind, time::Duration};
 
+    // Catch invalid command-line definitions before they reach users.
     #[test]
     fn verify_cli() {
         Cli::command().debug_assert();
+    }
+
+    // Elapsed ages use fixed-length days and retain subsecond precision.
+    #[test]
+    fn parse_elapsed_age() {
+        let cases = [
+            ("0s", Duration::ZERO),
+            ("4d", Duration::from_hours(96)),
+            ("1 hour", Duration::from_hours(1)),
+            ("2h30m", Duration::from_mins(150)),
+            ("1 week 2 days", Duration::from_hours(216)),
+            ("4.2s", Duration::new(4, 200_000_000)),
+            ("1ms 2us 3ns", Duration::new(0, 1_002_003)),
+            ("1 hour, 30 minutes", Duration::from_mins(90)),
+        ];
+        for (input, expected) in cases {
+            assert_eq!(parse_min_age(input).unwrap(), expected, "{input}");
+        }
+    }
+
+    // Reject calendar-dependent, negative, overflowing, and malformed ages before deletion starts.
+    #[test]
+    fn reject_invalid_age() {
+        let cases = [
+            "",
+            " ",
+            "-1h",
+            "1h ago",
+            "nonsense",
+            "1h garbage",
+            "18446744073709551616s",
+            "1 year",
+            "1 month",
+            "1M",
+            "0",
+            "1h 1h",
+            "1m 1h",
+        ];
+        for input in cases {
+            assert_eq!(
+                parse_min_age(input).unwrap_err().kind(),
+                ErrorKind::InvalidInput,
+                "{input}",
+            );
+        }
     }
 }
