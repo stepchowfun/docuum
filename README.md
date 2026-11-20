@@ -56,7 +56,7 @@ Options:
 
 The `--threshold` flag accepts [multiple representations](https://docs.rs/byte-unit/4.0.12/byte_unit/struct.Byte.html#examples-2), like `10 GB`, `10 GiB`, or `10GB`. On Linux, percentage-based thresholds like `50%` are also supported.
 
-The `--min-age` flag accepts [multiple representations](https://docs.rs/humantime/latest/humantime/fn.parse_duration.html), such as `4d` or `1 hour`.
+The `--min-age` flag accepts [Jiff's friendly duration format](https://docs.rs/jiff/latest/jiff/fmt/friendly/index.html), such as `4d`, `1 hour`, or `2h 30m`.
 
 You can change the log verbosity by setting an environment variable named `LOG_LEVEL` to one of `trace`, `debug`, `info`, `warning`, or `error`. The default is `debug`.
 
