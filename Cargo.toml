@@ -1,19 +1,12 @@
 [package]
 name = "docuum"
 version = "0.27.3"
-authors = ["Stephan Boyer <stephan@stephanboyer.com>"]
 edition = "2024"
 description = "LRU eviction of Docker images."
-license = "MIT"
 documentation = "https://github.com/stepchowfun/docuum"
-repository = "https://github.com/stepchowfun/docuum"
 readme = "README.md"
-
-[lints]
-clippy.all = { level = "deny", priority = -1 }
-clippy.default_numeric_fallback = "deny"
-clippy.pedantic = { level = "deny", priority = -1 }
-rust.warnings = "deny"
+repository = "https://github.com/stepchowfun/docuum"
+license = "MIT"
 
 [dependencies]
 byte-unit = "5.2.6"
@@ -27,12 +20,18 @@ log = "0.4.35"
 regex = { version = "1.13.2", default-features = false, features = ["std", "unicode-perl"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
-yaml_serde = "0.10.7"
 tempfile = "3.27.0"
+yaml_serde = "0.10.7"
+
+[dependencies.ctrlc]
+version = "3.5.3"
+features = ["termination"]  # [tag:ctrlc_term]
 
 [target.'cfg(target_os = "linux")'.dependencies]
 sysinfo = "0.40.4"
 
-[dependencies.ctrlc]
-version = "3.5.3"
-features = ["termination"] # [tag:ctrlc_term]
+[lints]
+clippy.all = { level = "deny", priority = -1 }
+clippy.default_numeric_fallback = "deny"
+clippy.pedantic = { level = "deny", priority = -1 }
+rust.warnings = "deny"
